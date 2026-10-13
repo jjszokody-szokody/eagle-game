@@ -11,11 +11,11 @@ html,body,#c{margin:0;width:100%;height:100%;overflow:hidden;background:#000;fon
 #joy{position:absolute;left:24px;bottom:24px;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.5);z-index:5}
 #knob{position:absolute;left:45px;top:45px;width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,.8)}
 .btn{position:absolute;bottom:30px;width:84px;height:84px;border-radius:50%;border:3px solid #fff;color:#fff;font-weight:800;font-size:15px;z-index:5;user-select:none;-webkit-user-select:none}
-#boost{right:120px;background:rgba(255,120,0,.75)}#poop{right:20px;background:rgba(120,80,40,.8);font-size:30px}
+#hover{right:20px;bottom:126px;width:72px;height:72px;font-size:13px;background:rgba(40,120,200,.8)}#hover.on{background:rgba(40,200,120,.9);box-shadow:0 0 14px #4f8}#toast{position:absolute;left:50%;top:38%;transform:translateX(-50%);color:#fff;font:800 26px system-ui;text-shadow:0 0 6px #000;opacity:0;transition:opacity .4s;z-index:6;pointer-events:none;white-space:nowrap}#boost{right:120px;background:rgba(255,120,0,.75)}#poop{right:20px;background:rgba(120,80,40,.8);font-size:30px}
 #stats{position:absolute;top:10px;left:10px;color:#fff;background:rgba(0,0,0,.5);padding:6px 10px;border-radius:8px;z-index:5;font-size:14px}
 #arrow{position:absolute;top:10px;right:10px;color:#fff;background:rgba(0,0,0,.5);padding:6px 10px;border-radius:8px;z-index:5;font-size:14px;text-align:center}
 #arrow span{display:inline-block;font-size:26px}
-#credits{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);color:#ddd;font-size:10px;z-index:5;text-shadow:0 0 2px #000;pointer-events:none}#credits a{pointer-events:auto}@media (max-width:700px){#credits{bottom:130px;width:90%;text-align:center;font-size:9px}}
+#credits{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);color:#ddd;font-size:10px;z-index:5;text-shadow:0 0 2px #000;pointer-events:none}#credits a{pointer-events:auto}@media (max-width:700px){#credits{bottom:206px;width:90%;text-align:center;font-size:9px}}
 .boosting{box-shadow:inset 0 0 120px 30px rgba(255,200,80,.5)}
 #fx{position:absolute;inset:0;pointer-events:none;z-index:4}
 </style></head><body>
@@ -24,6 +24,6 @@ html,body,#c{margin:0;width:100%;height:100%;overflow:hidden;background:#000;fon
 <div id="search"><input id="q" placeholder="Search a place…"><button id="go">Go</button></div>
 <div id="hud"><div id="stats"></div><div id="arrow">Nest<br><span>⬆</span><br><b id="dist"></b></div>
 <div id="joy"><div id="knob"></div></div>
-<button class="btn" id="boost">BOOST</button><button class="btn" id="poop">💩</button></div>
+<button class="btn" id="boost">BOOST</button><button class="btn" id="poop">💩</button><button class="btn" id="hover">HOVER</button><div id="toast"></div></div>
 <div id="credits">Imagery © Esri, Maxar, Earthstar Geographics · Google 3D Tiles / Cesium ion · Eagle: <a style="color:#ddd" href="https://sketchfab.com/3d-models/bald-eagle-8874cfcf83a54575ba8068376f8a63a8" target="_blank">"Bald Eagle" by ucdavisterc (CC-BY)</a> · Nest: procedural</div>
 <script src="config.js" onerror="0"></script><script src="game.js"></script></body></html>
