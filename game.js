@@ -33,7 +33,7 @@ function buildNest(lon,lat,b){const tex=twigTex();const mat=new C.ImageMaterialP
  [[0,1.2,0.9,0.5],[0.4,1.6,1.2,0.5],[0.8,2.0,1.6,0.5]].forEach(([h,top,bot,len])=>viewer.entities.add({position:C.Cartesian3.fromDegrees(lon,lat,b+h+len/2),cylinder:{length:len,topRadius:top,bottomRadius:bot,material:mat}}));
  viewer.entities.add({position:C.Cartesian3.fromDegrees(lon,lat,b+1.29),ellipse:{semiMajorAxis:1.5,semiMinorAxis:1.5,height:b+1.29,material:C.Color.fromCssColorString('#2a1c0e')}});
  [[0.3,0],[-0.3,0.2],[0,-0.35]].forEach(([dx,dy])=>viewer.entities.add({position:C.Cartesian3.fromDegrees(lon+dx/111320/Math.cos(lat*Math.PI/180),lat+dy/111320,b+1.45),ellipsoid:{radii:new C.Cartesian3(0.16,0.16,0.22),material:C.Color.fromCssColorString('#efe8d8')}}));
- viewer.entities.add({position:C.Cartesian3.fromDegrees(lon,lat,b+6),label:{text:'🏠 HOME NEST',font:'16px sans-serif',fillColor:C.Color.WHITE,outlineWidth:3,style:C.LabelStyle.FILL_AND_OUTLINE,distanceDisplayCondition:new C.DistanceDisplayCondition(0,20000),disableDepthTestDistance:1e9}});
+
 }
 // --- flight state
 const S={lon:0,lat:0,h:0,heading:0,pitch:0,roll:0,speed:22,boostT:0};
@@ -58,12 +58,12 @@ function makeEagle(){ const eq=()=>{const q=C.Transforms.headingPitchRollQuatern
 function pos(){return C.Cartesian3.fromDegrees(S.lon,S.lat,S.h)}
 function fwd(d,up){const m=111320;return C.Cartesian3.fromDegrees(S.lon+Math.sin(S.heading)*d*Math.cos(S.pitch)/(m*Math.cos(S.lat*Math.PI/180)),S.lat+Math.cos(S.heading)*d*Math.cos(S.pitch)/m,S.h+Math.sin(S.pitch)*d+up)}
 // --- input
-const inp={x:0,y:0};const keys={};addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=1;if(e.key===' ')boost();if(e.key.toLowerCase()==='p')poop();if(e.key.toLowerCase()==='h')hover();});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
+const inp={x:0,y:0};const keys={};addEventListener('keydown',e=>{keys[e.key.toLowerCase()]=1;if(e.key===' ')boost();if(e.key.toLowerCase()==='p')poop();if(e.key.toLowerCase()==='h')hover();if(e.key.toLowerCase()==='g')grab();if(e.key.toLowerCase()==='v')toggleCam();if(e.key.toLowerCase()==='f')dropWorms();});addEventListener('keyup',e=>keys[e.key.toLowerCase()]=0);
 const joy=$('joy'),knob=$('knob');let jid=null;
 function jmove(e){const r=joy.getBoundingClientRect();let dx=e.clientX-r.left-70,dy=e.clientY-r.top-70;const l=Math.hypot(dx,dy);if(l>55){dx*=55/l;dy*=55/l}knob.style.left=45+dx+'px';knob.style.top=45+dy+'px';inp.x=dx/55;inp.y=dy/55;}
 joy.addEventListener('pointerdown',e=>{jid=e.pointerId;joy.setPointerCapture(jid);jmove(e)});joy.addEventListener('pointermove',e=>{if(e.pointerId===jid)jmove(e)});
 const jend=e=>{if(e.pointerId!==jid)return;jid=null;inp.x=inp.y=0;knob.style.left=knob.style.top='45px'};joy.addEventListener('pointerup',jend);joy.addEventListener('pointercancel',jend);
-$('boost').addEventListener('pointerdown',e=>{e.preventDefault();boost()});$('poop').addEventListener('pointerdown',e=>{e.preventDefault();poop()});$('hover').addEventListener('pointerdown',e=>{e.preventDefault();hover()});
+$('boost').addEventListener('pointerdown',e=>{e.preventDefault();boost()});$('poop').addEventListener('pointerdown',e=>{e.preventDefault();poop()});$('hover').addEventListener('pointerdown',e=>{e.preventDefault();hover()});$('cam').addEventListener('pointerdown',e=>{e.preventDefault();toggleCam()});$('grab').addEventListener('pointerdown',e=>{e.preventDefault();grab()});$('drop').addEventListener('pointerdown',e=>{e.preventDefault();dropWorms()});
 let actx;function beep(f1,f2,dur,type){try{actx=actx||new AudioContext();const o=actx.createOscillator(),g=actx.createGain();o.type=type;o.frequency.setValueAtTime(f1,actx.currentTime);o.frequency.exponentialRampToValueAtTime(f2,actx.currentTime+dur);g.gain.setValueAtTime(.25,actx.currentTime);g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+dur);o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+dur)}catch(e){}}
 function hover(){if(mode!=='fly')return;S.hover=!S.hover;$('hover').classList.toggle('on',S.hover);beep(S.hover?700:400,S.hover?400:700,.25,'sine')}
 function boost(){if(mode!=='fly')return;if(S.hover){S.hover=false;$('hover').classList.remove('on');}S.boostT=3;beep(200,900,.6,'sawtooth')}
@@ -96,7 +96,7 @@ viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Mat
  // HUD
  const dx=(nest.lon-S.lon)*m*Math.cos(S.lat*Math.PI/180),dy=(nest.lat-S.lat)*m,dist=Math.hypot(dx,dy),brg=Math.atan2(dx,dy)-S.heading;
  $('arrow').querySelector('span').style.transform=`rotate(${brg}rad)`;$('dist').textContent=dist<1000?dist.toFixed(0)+' m':(dist/1000).toFixed(1)+' km';
- $('score').textContent='🐣 Worms delivered: '+score;$('stats').innerHTML=(carrying?'🪱 Carrying worm · ':'')+(S.hover?'🪽 HOVER · ':'')+`Alt ${(S.h-gnd).toFixed(0)} m AGL${window.__warn?' · ⚠️ PULL UP':''} · ${(S.speed*3.6).toFixed(0)} km/h${S.boostT>0?' · 🔥BOOST':''}`;
+ $('score').textContent='🐣 Worms delivered: '+score;$('stats').innerHTML=(carried?'🪱 Carrying '+carried+' · ':'')+(S.hover?'🪽 HOVER · ':'')+`Alt ${(S.h-gnd).toFixed(0)} m AGL${window.__warn?' · ⚠️ PULL UP':''} · ${(S.speed*3.6).toFixed(0)} km/h${S.boostT>0?' · 🔥BOOST':''}`;
 });
 viewer.camera.setView({destination:C.Cartesian3.fromDegrees(-92.1,46.78,2.0e7)});
 let poopCam=null,frameN=0,lastAhead=-1e9;window.__poopCam=()=>poopCam;
@@ -110,29 +110,45 @@ function splatFx(lon,lat,g,dist){spray(lon,lat,g);drops.forEach(d=>{if(d.g0===un
   label:{text:'SPLAT! '+dist.toFixed(0)+' m below',font:'bold 18px sans-serif',fillColor:C.Color.WHITE,outlineColor:C.Color.BLACK,outlineWidth:4,style:C.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new C.Cartesian2(0,-22),disableDepthTestDistance:1e9}});
  setTimeout(()=>{viewer.entities.remove(ring);pin.label.show=false;pin.point.pixelSize=7;},4000);
  const t=$('toast');t.textContent='💩 SPLAT! '+dist.toFixed(0)+' m below';t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,2500);}
-let camP=-0.21;viewer.scene.preRender.addEventListener(()=>{if(mode!=='fly')return;const back=S.boostT>0?2.6:1.9;const tp=Math.max(-1.1,Math.min(-0.18,-0.21+Math.min(0,S.pitch)*0.9));camP+=(tp-camP)*0.08;if(poopCam){if(performance.now()>poopCam.until)poopCam=null;else{const p=poopCam.p;viewer.camera.lookAt(C.Cartesian3.fromDegrees(p.lon,p.lat,p.h),new C.HeadingPitchRange(S.heading+0.5,-0.75,9));return;}}if(window.__camOv){const o=window.__camOv;viewer.camera.lookAt(o.at?C.Cartesian3.fromDegrees(o.at[0],o.at[1],o.at[2]):pos(),new C.HeadingPitchRange(S.heading+o.dh,o.p,o.r));return;}viewer.camera.lookAt(pos(),new C.HeadingPitchRange(S.heading,camP,back));});
+let camP=-0.21;viewer.scene.preRender.addEventListener(()=>{if(mode!=='fly')return;const back=S.boostT>0?2.6:1.9;const tp=Math.max(-1.1,Math.min(-0.18,-0.21+Math.min(0,S.pitch)*0.9));camP+=(tp-camP)*0.08;if(poopCam){if(performance.now()>poopCam.until)poopCam=null;else{const p=poopCam.p;viewer.camera.lookAt(C.Cartesian3.fromDegrees(p.lon,p.lat,p.h),poopCam.close?new C.HeadingPitchRange(S.heading+0.6+(performance.now()%20000)/6000,-0.45,3.2):new C.HeadingPitchRange(S.heading+0.5,-0.75,9));return;}}if(fp&&!poopCam&&!window.__camOv){if(eagle)eagle.show=false;viewer.camera.lookAtTransform(C.Matrix4.IDENTITY);
+  const b2=Math.sin(flap.phase*MD.cycles*2*Math.PI)*0.04*Math.min(1,flap.rate);viewer.camera.setView({destination:C.Cartesian3.fromDegrees(S.lon+Math.sin(S.heading)*0.25/(m2*Math.cos(S.lat*Math.PI/180)),S.lat+Math.cos(S.heading)*0.25/m2,S.h+0.08+b2+flap.bob),orientation:{heading:S.heading,pitch:S.pitch-0.12,roll:S.roll}});return;}
+ if(eagle)eagle.show=true;if(window.__camOv){const o=window.__camOv;viewer.camera.lookAt(o.at?C.Cartesian3.fromDegrees(o.at[0],o.at[1],o.at[2]):pos(),new C.HeadingPitchRange(S.heading+o.dh,o.p,o.r));return;}viewer.camera.lookAt(pos(),new C.HeadingPitchRange(S.heading,camP,back));});
 function saveState(force){if(mode!=='fly'||!nest)return;try{sessionStorage.setItem('eagleFlight',JSON.stringify({nest,S:{lon:S.lon,lat:S.lat,h:S.h,heading:S.heading,pitch:S.pitch},t:Date.now()}))}catch(e){}}
 setInterval(saveState,2000);addEventListener('pagehide',()=>saveState(true));document.addEventListener('visibilitychange',()=>{if(document.hidden)saveState(true)});
 async function resumeSaved(){let st;try{st=JSON.parse(sessionStorage.getItem('eagleFlight')||'null')}catch(e){}if(!st||!st.nest)return;
  await start(st.nest.lon,st.nest.lat);Object.assign(S,st.S);S.pitch=Math.max(0,S.pitch);console.log('resumed flight');}
 setTimeout(resumeSaved,1500);
-let quitArmed=0;
+let quitArmed=0;let fp=localStorage.getItem('eagleCam')==='fp';
+function toggleCam(){fp=!fp;try{localStorage.setItem('eagleCam',fp?'fp':'tp')}catch(e){};$('cam').innerHTML=(fp?'👁':'🎥')+'<small>'+(fp?'1ST':'3RD')+'</small>';toast(fp?'👁 Eagle-eye view':'🎥 Chase view');}
+setTimeout(()=>{$('cam').innerHTML=(fp?'👁':'🎥')+'<small>'+(fp?'1ST':'3RD')+'</small>'},0);
 // ---- worm quest
-let worms=[],carrying=null,carryEnt=null,chicks=[],happyUntil=0,score=+(localStorage.getItem('wormsDelivered')||0),lastChirp=0;
+let worms=[],carried=0,carryEnt=null,grabTarget=null,falling=[],feastUntil=0,chicks=[],happyUntil=0,score=+(localStorage.getItem('wormsDelivered')||0),lastChirp=0;
 function wormImg(){const c=document.createElement('canvas');c.width=128;c.height=64;const g=c.getContext('2d');g.lineCap='round';g.lineWidth=14;g.strokeStyle='#e8829a';g.beginPath();for(let x=10;x<=110;x+=4){const y=32+Math.sin(x/14)*10;x===10?g.moveTo(x,y):g.lineTo(x,y)}g.stroke();
  g.lineWidth=4;g.strokeStyle='#c45a74';for(let x=30;x<100;x+=12){g.beginPath();g.moveTo(x,24+Math.sin(x/14)*10);g.lineTo(x,40+Math.sin(x/14)*10);g.stroke()}g.fillStyle='#000';g.beginPath();g.arc(110,32+Math.sin(110/14)*10,2.5,0,7);g.fill();return c.toDataURL()}
 const WORM=wormImg();const m2=111320;
 function hdist(lon1,lat1,lon2,lat2){return Math.hypot((lon2-lon1)*m2*Math.cos(lat1*Math.PI/180),(lat2-lat1)*m2)}
 async function spawnWorm(){if(!nest)return;const a=Math.random()*6.283,d=40+Math.random()*260;const lat=nest.lat+Math.cos(a)*d/m2,lon=nest.lon+Math.sin(a)*d/(m2*Math.cos(nest.lat*Math.PI/180));
- let g=null;try{const [c]=await viewer.scene.sampleHeightMostDetailed([C.Cartographic.fromDegrees(lon,lat)],dyn);g=c.height}catch(e){}if(g===undefined||g===null)g=groundAt(lon,lat);if(g===null||g===undefined)g=nest.b;if(!nest)return;
+ let g=null;try{const [c]=await viewer.scene.sampleHeightMostDetailed([C.Cartographic.fromDegrees(lon,lat)],dyn);g=c.height}catch(e){}if(g===undefined||g===null)g=groundAt(lon,lat);if(g===null||g===undefined)g=nest.b;if(!nest)return;placeWorm(lon,lat,g);}
+function placeWorm(lon,lat,g){
  const w={lon,lat,g,t0:Math.random()*10};const P=C.Cartesian3.fromDegrees(lon,lat,g+0.15);
  w.ents=[viewer.entities.add({position:P,billboard:{image:WORM,width:new C.CallbackProperty(()=>60+Math.sin(performance.now()/180+w.t0)*10,false),height:30,rotation:new C.CallbackProperty(()=>Math.sin(performance.now()/260+w.t0)*0.35,false),verticalOrigin:C.VerticalOrigin.BOTTOM,disableDepthTestDistance:1e9}}),
   viewer.entities.add({polyline:{positions:[C.Cartesian3.fromDegrees(lon,lat,g+0.3),C.Cartesian3.fromDegrees(lon,lat,g+18)],width:8,material:new C.PolylineGlowMaterialProperty({glowPower:0.3,color:C.Color.fromCssColorString('#ff6fa5').withAlpha(.8)})}}),
   viewer.entities.add({position:C.Cartesian3.fromDegrees(lon,lat,g+19),point:{pixelSize:new C.CallbackProperty(()=>11+Math.sin(performance.now()/300+w.t0)*4,false),color:C.Color.fromCssColorString('#ff4f9a'),outlineColor:C.Color.WHITE,outlineWidth:2,disableDepthTestDistance:1e9},label:{text:'🪱',font:'22px sans-serif',pixelOffset:new C.Cartesian2(0,-20),disableDepthTestDistance:1e9,distanceDisplayCondition:new C.DistanceDisplayCondition(0,600)}})];
  worms.push(w);}
+function updCarry(){if(carried>0&&!carryEnt)carryEnt=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(S.lon,S.lat,S.h+flap.bob-0.2),false),billboard:{image:WORM,width:new C.CallbackProperty(()=>44+Math.sin(performance.now()/150)*6,false),height:22,rotation:new C.CallbackProperty(()=>1.2+Math.sin(performance.now()/200)*0.4,false)}});
+ if(carried===0&&carryEnt){viewer.entities.remove(carryEnt);carryEnt=null;}}
+function grab(){if(mode!=='fly'||!grabTarget)return;const w=grabTarget;w.ents.forEach(e=>viewer.entities.remove(e));worms=worms.filter(x=>x!==w);grabTarget=null;carried++;updCarry();beep(900,1400,.15,'triangle');toast('🪱 Got a worm! ('+carried+' carried)');if(worms.length<10)setTimeout(spawnWorm,3000);}
+function dropWorms(){if(mode!=='fly'||carried===0)return;const n=carried;carried=0;updCarry();const toNest=hdist(S.lon,S.lat,nest.lon,nest.lat)<=40;
+ const f={lon:S.lon,lat:S.lat,h:S.h-0.3,vh:Math.min(0,Math.sin(S.pitch)*S.speed),n,toNest,t:performance.now(),h0g:S.ground||0};
+ f.ent=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(f.lon,f.lat,f.h),false),billboard:{image:WORM,width:46,height:23,rotation:new C.CallbackProperty(()=>performance.now()/120,false)},label:{text:n>1?'×'+n:'',font:'bold 16px sans-serif',fillColor:C.Color.WHITE,outlineWidth:3,style:C.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new C.Cartesian2(24,-10)}});
+ falling.push(f);poopCam={p:f,until:Infinity};beep(600,300,.3,'sine');if(toNest)toast('🎯 Incoming to the nest!');}
+function feast(n){const now=performance.now();happyUntil=now+3500;feastUntil=now+3200;score+=n;try{localStorage.setItem('wormsDelivered',score)}catch(e){};chirp(14);
+ poopCam={p:{lon:nest.lon,lat:nest.lat,h:nest.b+1.6},until:now+3200,close:true};
+ for(let i=0;i<10;i++){const a=Math.random()*6.28,t0=now+i*200;const e=viewer.entities.add({position:new C.CallbackProperty(()=>{const k=(performance.now()-t0)/1000;return C.Cartesian3.fromDegrees(nest.lon+Math.cos(a)*0.5/(m2*Math.cos(nest.lat*Math.PI/180)),nest.lat+Math.sin(a)*0.5/m2,nest.b+2+Math.max(0,k)*0.9)},false),label:{text:i%2?'💖':'✨',font:'26px sans-serif',disableDepthTestDistance:1e9}});setTimeout(()=>viewer.entities.remove(e),3400);}
+ setTimeout(()=>toast('🐣 Yum! Worms delivered: '+score),2600);}
 function spawnWorms(){for(let i=worms.length;i<12;i++)spawnWorm();}
 function addChicks(lon,lat,b){chicks=[];[[0.35,0.1],[-0.3,0.25],[0.0,-0.35]].forEach(([dx,dy],i)=>{const cl=lon+dx/(m2*Math.cos(lat*Math.PI/180)),ca=lat+dy/m2;const ph=i*2.1;
- const bob=()=>b+1.55+Math.abs(Math.sin(performance.now()/(performance.now()<happyUntil?120:400)+ph))*(performance.now()<happyUntil?0.25:0.07);
+ const bob=()=>b+1.55+(performance.now()<feastUntil?Math.max(0,Math.sin(performance.now()/160+ph))*0.35:0)+Math.abs(Math.sin(performance.now()/(performance.now()<happyUntil?120:400)+ph))*(performance.now()<happyUntil?0.25:0.07);
  const body=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(cl,ca,bob()),false),ellipsoid:{radii:new C.Cartesian3(0.2,0.2,0.24),material:C.Color.fromCssColorString('#cfc7b8')}});
  const head=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(cl,ca,bob()+0.3),false),ellipsoid:{radii:new C.Cartesian3(0.13,0.13,0.13),material:C.Color.fromCssColorString('#e2dccf')}});
  const beak=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(cl,ca,bob()+0.47),false),cylinder:{length:new C.CallbackProperty(()=>0.08+Math.abs(Math.sin(performance.now()/150+ph))*0.08,false),topRadius:0.07,bottomRadius:0.0,material:C.Color.fromCssColorString('#f2a33a')}});
@@ -141,16 +157,19 @@ function addChicks(lon,lat,b){chicks=[];[[0.35,0.1],[-0.3,0.25],[0.0,-0.35]].for
 function chirp(n){for(let i=0;i<n;i++)setTimeout(()=>beep(2400+Math.random()*900,1800,.09,'sine'),i*110)}
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,2500);}
 function wormStep(){if(!nest)return;const now=performance.now();
- if(!carrying){for(let i=worms.length-1;i>=0;i--){const w=worms[i];if(hdist(S.lon,S.lat,w.lon,w.lat)<5&&S.h-w.g<5){w.ents.forEach(e=>viewer.entities.remove(e));worms.splice(i,1);carrying=w;beep(900,1400,.15,'triangle');toast('🪱 Got a worm! Take it to the nest');
-  carryEnt=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(S.lon,S.lat,S.h+flap.bob-0.3),false),billboard:{image:WORM,width:new C.CallbackProperty(()=>44+Math.sin(performance.now()/150)*6,false),height:22,rotation:new C.CallbackProperty(()=>1.2+Math.sin(performance.now()/200)*0.4,false)}});setTimeout(spawnWorm,3000);break;}}}
- else{const dn=hdist(S.lon,S.lat,nest.lon,nest.lat);if(dn<6&&S.h-nest.b<8){viewer.entities.remove(carryEnt);carryEnt=null;carrying=null;score++;try{localStorage.setItem('wormsDelivered',score)}catch(e){};happyUntil=now+3500;chirp(8);toast('🐣 Yum! Worms delivered: '+score);}}
+ let near=null,nd=1e9;for(const w of worms){const d=Math.hypot(hdist(S.lon,S.lat,w.lon,w.lat),S.h-w.g);if(d<nd){nd=d;near=w;}}
+ const can=nd<=8;$('grab').classList.toggle('ready',can);$('grab').disabled=!can;grabTarget=can?near:null;
+ for(let i=falling.length-1;i>=0;i--){const f=falling[i];const dt=Math.min(.05,(now-f.t)/1000);f.t=now;f.vh-=9.8*dt;f.h+=f.vh*dt;
+  if(f.toNest){const k=Math.min(1,dt*2.2);f.lon+=(nest.lon-f.lon)*k;f.lat+=(nest.lat-f.lat)*k;if(f.h<=nest.b+1.6){falling.splice(i,1);viewer.entities.remove(f.ent);if(!falling.some(x=>x.toNest))feast(f.n);continue;}}
+  else{const g=groundAt(f.lon,f.lat)??f.h0g;if(f.h<=g+0.1){falling.splice(i,1);viewer.entities.remove(f.ent);for(let k=0;k<f.n;k++)placeWorm(f.lon+(Math.random()-.5)*3/m2,f.lat+(Math.random()-.5)*3/m2,g);if(poopCam&&poopCam.p===f)poopCam.until=now+1200;toast('🪱 Worms landed — grab them again');continue;}}}
  if(dn2()<80&&now-lastChirp>2500+Math.random()*2000){lastChirp=now;chirp(2);}
- $('arrow').classList.toggle('carry',!!carrying);}
+ $('arrow').classList.toggle('carry',carried>0);$('drop').disabled=carried===0;$('dropn').textContent=carried||'';$('drop').classList.toggle('ready',carried>0);}
 function dn2(){return hdist(S.lon,S.lat,nest.lon,nest.lat)}
-function endFlight(){if(mode!=='fly')return;try{sessionStorage.removeItem('eagleFlight')}catch(e){}mode='pick';poops.length=0;drops.length=0;worms=[];carrying=null;carryEnt=null;chicks=[];$('arrow').classList.remove('carry');poopCam=null;S.hover=false;S.boostT=0;$('hover').classList.remove('on');window.__mp=null;
+function endFlight(){if(mode!=='fly')return;try{sessionStorage.removeItem('eagleFlight')}catch(e){}mode='pick';poops.length=0;drops.length=0;worms=[];carried=0;carryEnt=null;falling=[];grabTarget=null;chicks=[];$('arrow').classList.remove('carry');poopCam=null;S.hover=false;S.boostT=0;$('hover').classList.remove('on');window.__mp=null;
  viewer.entities.removeAll();dyn.length=0;nest=null;makeEagle();
  $('hud').style.display='none';$('banner').style.display='block';$('banner').innerHTML="🦅 Tap anywhere on Earth to build your eagle's nest<br><small>zoom in for precision (pinch / scroll)</small>";$('search').style.display='flex';
  document.body.classList.remove('boosting');$('fx').className='';viewer.camera.lookAtTransform(C.Matrix4.IDENTITY);viewer.scene.screenSpaceCameraController.enableInputs=true;
  viewer.camera.flyTo({destination:C.Cartesian3.fromDegrees(S.lon,S.lat,2.0e6),duration:1.5});}
+$('info').onclick=()=>$('creditsPanel').classList.toggle('open');$('closeCredits').onclick=()=>$('creditsPanel').classList.remove('open');
 $('quit').addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const now=Date.now();if(now-quitArmed<3000){quitArmed=0;$('quitc').style.display='none';endFlight();}else{quitArmed=now;$('quitc').style.display='block';setTimeout(()=>{if(Date.now()-quitArmed>=2900)$('quitc').style.display='none'},3000);}});
-window.__game={endFlight,worms:()=>worms,nest:()=>nest,get carrying(){return !!carrying},get score(){return score},S,teleport(lon,lat,h,hd){Object.assign(S,{lon,lat,h,heading:hd,pitch:0})},start,poop,boost,get mode(){return mode}};
+window.__game={endFlight,toggleCam,get fp(){return fp},worms:()=>worms,nest:()=>nest,get carried(){return carried},grab,dropWorms,get score(){return score},S,teleport(lon,lat,h,hd){Object.assign(S,{lon,lat,h,heading:hd,pitch:0})},start,poop,boost,get mode(){return mode}};
