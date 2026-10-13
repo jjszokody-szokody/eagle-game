@@ -73,8 +73,8 @@ viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Mat
  S.heading+=tx*1.3*dt;S.roll+=(tx*0.7-S.roll)*3*dt;
  S.pitch+=(-ty*0.9-S.pitch*0.4)*dt*1.5;S.pitch=Math.max(-1.2,Math.min(1.0,S.pitch));
  S.boostT=Math.max(0,S.boostT-dt);const target=(S.boostT>0?70:22)-Math.sin(S.pitch)*8;S.speed+=(target-S.speed)*1.5*dt;
- {const climb=Math.max(0,S.pitch),dive=S.pitch<-0.22;let tr=dive?0:(0.55+climb*1.6+(S.boostT>0?1.0:0));tr=Math.min(1.9,tr);flap.rate+=(tr-flap.rate)*Math.min(1,3*dt);
- if(flap.rate<0.08){flap.phase=(flap.phase+((MD.glide-flap.phase+1.5)%1-0.5)*Math.min(1,4*dt)+1)%1;}else flap.phase=(flap.phase+flap.rate*dt/MD.cycles)%1;
+ {const climb=Math.max(0,S.pitch),dive=S.pitch<-0.22;let tr=dive?0:(0.55+climb*1.6+(S.boostT>0?1.0:0));tr=Math.min(1.9,tr);flap.rate+=(tr-flap.rate)*Math.min(1,(dive?9:3)*dt);
+ if(dive&&flap.rate<0.35){flap.phase=(flap.phase+((MD.glide-flap.phase+1.5)%1-0.5)*Math.min(1,7*dt)+1)%1;}else flap.phase=(flap.phase+flap.rate*dt/MD.cycles)%1;
  if(window.__fixPhase!==undefined)flap.phase=window.__fixPhase;flap.bob=-Math.sin(flap.phase*MD.cycles*2*Math.PI)*0.05*Math.min(1,flap.rate);}
  document.body.classList.toggle('boosting',S.boostT>0);$('fx').className=S.boostT>0?'boosting':'';
  const m=111320,d=S.speed*dt*Math.cos(S.pitch);S.lat+=Math.cos(S.heading)*d/m;S.lon+=Math.sin(S.heading)*d/(m*Math.cos(S.lat*Math.PI/180));S.h+=Math.sin(S.pitch)*S.speed*dt;
@@ -93,5 +93,5 @@ viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Mat
  $('stats').innerHTML=`Alt ${(S.h-gnd).toFixed(0)} m AGL${window.__warn?' · ⚠️ PULL UP':''} · ${(S.speed*3.6).toFixed(0)} km/h${S.boostT>0?' · 🔥BOOST':''}`;
 });
 viewer.camera.setView({destination:C.Cartesian3.fromDegrees(-92.1,46.78,2.0e7)});
-viewer.scene.preRender.addEventListener(()=>{if(mode!=='fly')return;const back=S.boostT>0?4.8:3.4;viewer.camera.lookAt(pos(),new C.HeadingPitchRange(S.heading,C.Math.toRadians(-12)-S.pitch*0.3,back));});
+let camP=-0.21;viewer.scene.preRender.addEventListener(()=>{if(mode!=='fly')return;const back=S.boostT>0?4.8:3.4;const tp=Math.max(-1.1,Math.min(-0.18,-0.21+Math.min(0,S.pitch)*0.9));camP+=(tp-camP)*0.08;viewer.camera.lookAt(pos(),new C.HeadingPitchRange(S.heading,camP,back));});
 window.__game={S,teleport(lon,lat,h,hd){Object.assign(S,{lon,lat,h,heading:hd,pitch:0})},start,poop,boost,get mode(){return mode}};
