@@ -157,7 +157,7 @@ function feast(n){const now=performance.now();happyUntil=now+3500;feastUntil=now
 function spawnWorms(){for(let i=worms.length;i<12;i++)spawnWorm();}
 function downTex(){const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');g.fillStyle='#d9d4cb';g.fillRect(0,0,128,128);
  for(let k=0;k<2600;k++){const x=Math.random()*128,y=Math.random()*128,l=150+Math.random()*100|0;g.strokeStyle=`rgba(${l},${l-4},${l-12},.55)`;g.lineWidth=0.8;g.beginPath();g.moveTo(x,y);const a=Math.random()*6.28;g.lineTo(x+Math.cos(a)*5,y+Math.sin(a)*5);g.stroke();}return c;}
-function addChicks(lon,lat,b){chicks=[];const DOWN=new C.ImageMaterialProperty({image:downTex(),repeat:new C.Cartesian2(3,3)});const DOWN2=new C.ImageMaterialProperty({image:downTex(),repeat:new C.Cartesian2(2,2),color:C.Color.fromCssColorString('#f2efe9')});
+function addChicks(lon,lat,b){chicks=[];const DOWN=new C.ImageMaterialProperty({image:downTex(),repeat:new C.Cartesian2(5,5),color:C.Color.fromCssColorString('#a9a39a')});const DOWN2=new C.ImageMaterialProperty({image:downTex(),repeat:new C.Cartesian2(2,2),color:C.Color.fromCssColorString('#c9c3b9')});
  const cosl=Math.cos(lat*Math.PI/180);
  [[0.32,0.12],[-0.3,0.22],[0.02,-0.36]].forEach(([dx,dy],i)=>{const ph=i*2.1;const hd=Math.atan2(dx,dy);// face outward
   const fx=Math.sin(hd),fy=Math.cos(hd);
