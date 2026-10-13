@@ -13,7 +13,15 @@ const keyLight=new C.DirectionalLight({direction:new C.Cartesian3(0,0,-1),intens
 viewer.scene.preRender.addEventListener(()=>{const up=viewer.scene.globe.ellipsoid.geodeticSurfaceNormal(viewer.camera.positionWC,new C.Cartesian3());const d=C.Cartesian3.add(C.Cartesian3.multiplyByScalar(up,-1.2,new C.Cartesian3()),C.Cartesian3.add(viewer.camera.directionWC,C.Cartesian3.multiplyByScalar(viewer.camera.rightWC,0.4,new C.Cartesian3()),new C.Cartesian3()),new C.Cartesian3());C.Cartesian3.normalize(d,keyLight.direction);});
 let tiles=null;window.__tilesReady=false;
 (async()=>{if(!ION||location.search.includes('notiles'))return;try{tiles=await C.createGooglePhotorealistic3DTileset();}catch(e){console.warn('Google tiles unavailable, using OSM Buildings',e);try{tiles=await C.createOsmBuildingsAsync();}catch(e2){}}
- if(tiles){if(MOBILE){tiles.maximumScreenSpaceError=20;tiles.cacheBytes=96*1024*1024;tiles.maximumCacheOverflowBytes=32*1024*1024;}else{tiles.cacheBytes=384*1024*1024;}viewer.scene.primitives.add(tiles);window.__tilesReady=true;}})();
+ if(tiles){const LEG=location.search.includes('legacylod');
+ if(LEG){if(MOBILE){tiles.maximumScreenSpaceError=20;tiles.cacheBytes=96*1024*1024;tiles.maximumCacheOverflowBytes=32*1024*1024;}else{tiles.cacheBytes=384*1024*1024;}}
+ else{// sharp near the eagle, coarse beyond ~1.6 km: low base SSE + strong distance-based SSE growth + fog culling
+  tiles.maximumScreenSpaceError=MOBILE?10:6;tiles.dynamicScreenSpaceError=true;tiles.dynamicScreenSpaceErrorDensity=1.2e-3;tiles.dynamicScreenSpaceErrorFactor=MOBILE?40:28;tiles.dynamicScreenSpaceErrorHeightFalloff=0.5;
+  tiles.foveatedScreenSpaceError=true;tiles.foveatedConeSize=0.25;tiles.foveatedMinimumScreenSpaceErrorRelaxation=MOBILE?8:4;tiles.cullRequestsWhileMoving=true;tiles.cullRequestsWhileMovingMultiplier=60;
+  tiles.cacheBytes=(MOBILE?96:384)*1024*1024;tiles.maximumCacheOverflowBytes=(MOBILE?24:128)*1024*1024;
+  viewer.scene.fog.enabled=true;viewer.scene.fog.density=MOBILE?6e-4:4.5e-4;viewer.scene.fog.screenSpaceErrorFactor=6;viewer.scene.fog.minimumBrightness=0.15;
+  viewer.scene.globe.maximumScreenSpaceError=MOBILE?2:1.5;}
+ window.__tileset=tiles;viewer.scene.primitives.add(tiles);window.__tilesReady=true;}})();
 const dyn=[];// entities to exclude from height sampling
 function groundAt(lon,lat){const c=C.Cartographic.fromDegrees(lon,lat);let h;try{h=viewer.scene.sampleHeightSupported?viewer.scene.sampleHeight(c,dyn):undefined}catch(e){}
  const t=viewer.scene.globe.getHeight(c);if(h===undefined||(t!==undefined&&h<t-30))h=t;return h===undefined?null:h;}
@@ -147,13 +155,31 @@ function feast(n){const now=performance.now();happyUntil=now+3500;feastUntil=now
  for(let i=0;i<10;i++){const a=Math.random()*6.28,t0=now+i*200;const e=viewer.entities.add({position:new C.CallbackProperty(()=>{const k=(performance.now()-t0)/1000;return C.Cartesian3.fromDegrees(nest.lon+Math.cos(a)*0.5/(m2*Math.cos(nest.lat*Math.PI/180)),nest.lat+Math.sin(a)*0.5/m2,nest.b+2+Math.max(0,k)*0.9)},false),label:{text:i%2?'💖':'✨',font:'26px sans-serif',disableDepthTestDistance:1e9}});setTimeout(()=>viewer.entities.remove(e),3400);}
  setTimeout(()=>toast('🐣 Yum! Worms delivered: '+score),2600);}
 function spawnWorms(){for(let i=worms.length;i<12;i++)spawnWorm();}
-function addChicks(lon,lat,b){chicks=[];[[0.35,0.1],[-0.3,0.25],[0.0,-0.35]].forEach(([dx,dy],i)=>{const cl=lon+dx/(m2*Math.cos(lat*Math.PI/180)),ca=lat+dy/m2;const ph=i*2.1;
- const bob=()=>b+1.55+(performance.now()<feastUntil?Math.max(0,Math.sin(performance.now()/160+ph))*0.35:0)+Math.abs(Math.sin(performance.now()/(performance.now()<happyUntil?120:400)+ph))*(performance.now()<happyUntil?0.25:0.07);
- const body=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(cl,ca,bob()),false),ellipsoid:{radii:new C.Cartesian3(0.2,0.2,0.24),material:C.Color.fromCssColorString('#cfc7b8')}});
- const head=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(cl,ca,bob()+0.3),false),ellipsoid:{radii:new C.Cartesian3(0.13,0.13,0.13),material:C.Color.fromCssColorString('#e2dccf')}});
- const beak=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(cl,ca,bob()+0.47),false),cylinder:{length:new C.CallbackProperty(()=>0.08+Math.abs(Math.sin(performance.now()/150+ph))*0.08,false),topRadius:0.07,bottomRadius:0.0,material:C.Color.fromCssColorString('#f2a33a')}});
- chicks.push(body,head,beak);});
- viewer.entities.add({position:C.Cartesian3.fromDegrees(lon,lat,b+4),label:{text:new C.CallbackProperty(()=>'🐣 Eaglets · fed '+score,false),font:'14px sans-serif',fillColor:C.Color.WHITE,outlineWidth:3,style:C.LabelStyle.FILL_AND_OUTLINE,disableDepthTestDistance:1e9,distanceDisplayCondition:new C.DistanceDisplayCondition(0,3000)}});}
+function downTex(){const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d');g.fillStyle='#d9d4cb';g.fillRect(0,0,128,128);
+ for(let k=0;k<2600;k++){const x=Math.random()*128,y=Math.random()*128,l=150+Math.random()*100|0;g.strokeStyle=`rgba(${l},${l-4},${l-12},.55)`;g.lineWidth=0.8;g.beginPath();g.moveTo(x,y);const a=Math.random()*6.28;g.lineTo(x+Math.cos(a)*5,y+Math.sin(a)*5);g.stroke();}return c;}
+function addChicks(lon,lat,b){chicks=[];const DOWN=new C.ImageMaterialProperty({image:downTex(),repeat:new C.Cartesian2(3,3)});const DOWN2=new C.ImageMaterialProperty({image:downTex(),repeat:new C.Cartesian2(2,2),color:C.Color.fromCssColorString('#f2efe9')});
+ const cosl=Math.cos(lat*Math.PI/180);
+ [[0.32,0.12],[-0.3,0.22],[0.02,-0.36]].forEach(([dx,dy],i)=>{const ph=i*2.1;const hd=Math.atan2(dx,dy);// face outward
+  const fx=Math.sin(hd),fy=Math.cos(hd);
+  const lift=()=>{const n=performance.now();return (n<feastUntil?Math.max(0,Math.sin(n/160+ph))*0.3:0)+Math.abs(Math.sin(n/(n<happyUntil?120:420)+ph))*(n<happyUntil?0.18:0.05);};
+  const lunge=()=>{const n=performance.now();return n<feastUntil?Math.max(0,Math.sin(n/160+ph))*0.12:0;};
+  const P=(ex,ey,ez,fwd=0)=>new C.CallbackProperty(()=>{const L=lunge()*fwd;return C.Cartesian3.fromDegrees(lon+(dx+ex+fx*L)/(m2*cosl),lat+(dy+ey+fy*L)/m2,b+1.35+ez+lift())},false);
+  const add=o=>{const e=viewer.entities.add(o);chicks.push(e);return e;};
+  // downy pear-shaped body + wing stubs
+  add({position:P(0,0,0.2),ellipsoid:{radii:new C.Cartesian3(0.2,0.2,0.24),material:DOWN}});
+  add({position:P(-fx*0.04,-fy*0.04,0.06),ellipsoid:{radii:new C.Cartesian3(0.22,0.22,0.14),material:DOWN}});
+  [-1,1].forEach(sd=>add({position:P(fy*0.19*sd,-fx*0.19*sd,0.2),ellipsoid:{radii:new C.Cartesian3(0.06,0.06,0.12),material:DOWN}}));
+  // big head on short neck
+  add({position:P(fx*0.07,fy*0.07,0.5,0.6),ellipsoid:{radii:new C.Cartesian3(0.15,0.15,0.14),material:DOWN2}});
+  // dark eyes
+  [-1,1].forEach(sd=>add({position:P(fx*0.17+fy*0.07*sd,fy*0.17-fx*0.07*sd,0.54,0.6),ellipsoid:{radii:new C.Cartesian3(0.03,0.03,0.035),material:C.Color.fromCssColorString('#1a1410')}}));
+  // hooked beak: dark base cere, grey upper mandible, hooked tip, gaping lower mandible
+  add({position:P(fx*0.2,fy*0.2,0.5,0.6),ellipsoid:{radii:new C.Cartesian3(0.045,0.045,0.035),material:C.Color.fromCssColorString('#4a4038')}});
+  add({position:P(fx*0.25,fy*0.25,0.49,0.6),ellipsoid:{radii:new C.Cartesian3(0.045,0.045,0.025),material:C.Color.fromCssColorString('#2b2622')}});
+  add({position:P(fx*0.285,fy*0.285,0.465,0.6),ellipsoid:{radii:new C.Cartesian3(0.018,0.018,0.03),material:C.Color.fromCssColorString('#1d1916')}});
+  add({position:new C.CallbackProperty(()=>{const n=performance.now();const gape=0.02+Math.abs(Math.sin(n/(n<feastUntil?90:170)+ph))*0.035;const L=lunge()*0.6;return C.Cartesian3.fromDegrees(lon+(dx+fx*(0.24+L))/(m2*cosl),lat+(dy+fy*(0.24+L))/m2,b+1.35+0.47-gape+lift())},false),ellipsoid:{radii:new C.Cartesian3(0.04,0.04,0.015),material:C.Color.fromCssColorString('#e7a0a0')}});
+ });
+ viewer.entities.add({position:C.Cartesian3.fromDegrees(lon,lat,b+3.2),label:{text:new C.CallbackProperty(()=>'🐣 fed '+score,false),font:'13px sans-serif',fillColor:C.Color.WHITE,outlineWidth:3,style:C.LabelStyle.FILL_AND_OUTLINE,disableDepthTestDistance:1e9,distanceDisplayCondition:new C.DistanceDisplayCondition(0,1500)}});}
 function chirp(n){for(let i=0;i<n;i++)setTimeout(()=>beep(2400+Math.random()*900,1800,.09,'sine'),i*110)}
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,2500);}
 function wormStep(){if(!nest)return;const now=performance.now();
