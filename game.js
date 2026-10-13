@@ -73,7 +73,7 @@ joy.addEventListener('pointerdown',e=>{jid=e.pointerId;joy.setPointerCapture(jid
 const jend=e=>{if(e.pointerId!==jid)return;jid=null;inp.x=inp.y=0;knob.style.left=knob.style.top='45px'};joy.addEventListener('pointerup',jend);joy.addEventListener('pointercancel',jend);
 $('boost').addEventListener('pointerdown',e=>{e.preventDefault();boost()});$('poop').addEventListener('pointerdown',e=>{e.preventDefault();poop()});$('hover').addEventListener('pointerdown',e=>{e.preventDefault();hover()});$('cam').addEventListener('pointerdown',e=>{e.preventDefault();toggleCam()});$('grab').addEventListener('pointerdown',e=>{e.preventDefault();grab()});$('drop').addEventListener('pointerdown',e=>{e.preventDefault();dropWorms()});
 let actx;function beep(f1,f2,dur,type){try{actx=actx||new AudioContext();const o=actx.createOscillator(),g=actx.createGain();o.type=type;o.frequency.setValueAtTime(f1,actx.currentTime);o.frequency.exponentialRampToValueAtTime(f2,actx.currentTime+dur);g.gain.setValueAtTime(.25,actx.currentTime);g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+dur);o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+dur)}catch(e){}}
-function hover(){if(mode!=='fly')return;S.hover=!S.hover;$('hover').classList.toggle('on',S.hover);beep(S.hover?700:400,S.hover?400:700,.25,'sine')}
+function hover(){if(mode!=='fly')return;S.hover=!S.hover;if(S.hover){S.holdH=S.h;S.speed=0;S.pitch=0;S.roll=0;}$('hover').classList.toggle('on',S.hover);beep(S.hover?700:400,S.hover?400:700,.25,'sine')}
 function boost(){if(mode!=='fly')return;if(S.hover){S.hover=false;$('hover').classList.remove('on');}S.boostT=3;beep(200,900,.6,'sawtooth')}
 const poops=[];
 function poop(){if(mode!=='fly')return;beep(500,80,.35,'square');const p={lon:S.lon,lat:S.lat,h:S.h-0.3,vh:Math.sin(S.pitch)*S.speed,vf:S.speed*Math.cos(S.pitch)*0.9,hd:S.heading,h0:S.h};poopCam={p,until:Infinity};
@@ -84,18 +84,18 @@ viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Mat
  let tx=inp.x+((keys.d||keys.arrowright)?1:0)-((keys.a||keys.arrowleft)?1:0),ty=inp.y+((keys.s||keys.arrowdown)?1:0)-((keys.w||keys.arrowup)?1:0);
  tx=Math.max(-1,Math.min(1,tx));ty=Math.max(-1,Math.min(1,ty));
  S.heading+=tx*(S.hover?1.6:1.3)*dt;S.roll+=((S.hover?0:tx*0.7)-S.roll)*3*dt;
- if(S.hover){S.pitch+=(0-S.pitch)*4*dt;S.h+=-ty*6*dt;}else S.pitch+=(-ty*0.9-S.pitch*0.4)*dt*1.5;S.pitch=Math.max(-1.2,Math.min(1.0,S.pitch));
+ if(S.hover){S.pitch=0;S.speed=0;const dz=Math.abs(ty)>0.08?-ty*3*dt:0;S.holdH=(S.holdH??S.h)+dz;S.h=S.holdH;}else S.pitch+=(-ty*0.9-S.pitch*0.4)*dt*1.5;S.pitch=Math.max(-1.2,Math.min(1.0,S.pitch));
  S.boostT=Math.max(0,S.boostT-dt);const target=S.hover?0:(S.boostT>0?70:22)-Math.sin(S.pitch)*8;S.speed+=(target-S.speed)*(S.hover?3:1.5)*dt;
  {const climb=Math.max(0,S.pitch),dive=!S.hover&&S.pitch<-0.22;let tr=S.hover?0:dive?0:(0.55+climb*1.6+(S.boostT>0?1.0:0));tr=Math.min(S.hover?2.4:1.9,tr);flap.rate+=(tr-flap.rate)*Math.min(1,(dive?9:3)*dt);
  if((dive||S.hover)&&flap.rate<0.35){flap.phase=(flap.phase+((MD.glide-flap.phase+1.5)%1-0.5)*Math.min(1,7*dt)+1)%1;}else flap.phase=(flap.phase+flap.rate*dt/MD.cycles)%1;
  if(window.__fixPhase!==undefined)flap.phase=window.__fixPhase;flap.bob=S.hover?Math.sin(performance.now()/450)*0.02:-Math.sin(flap.phase*MD.cycles*2*Math.PI)*0.025*Math.min(1,flap.rate);}
  document.body.classList.toggle('boosting',S.boostT>0);$('fx').className=S.boostT>0?'boosting':'';
- const m=111320,d=S.speed*dt*Math.cos(S.pitch);S.lat+=Math.cos(S.heading)*d/m;S.lon+=Math.sin(S.heading)*d/(m*Math.cos(S.lat*Math.PI/180));S.h+=Math.sin(S.pitch)*S.speed*dt;
+ const m=111320,d=S.hover?0:S.speed*dt*Math.cos(S.pitch);if(!S.hover)S.lat+=Math.cos(S.heading)*d/m;S.lon+=Math.sin(S.heading)*d/(m*Math.cos(S.lat*Math.PI/180));if(!S.hover)S.h+=Math.sin(S.pitch)*S.speed*dt;
  const g0=groundAt(S.lon,S.lat);if(g0!==null)S.ground=g0;const gnd=S.ground||0;
  // look-ahead collision avoidance (mountains/buildings)
  frameN=(frameN+1)%1000;let ahead=(MOBILE&&frameN%2)?lastAhead:-1e9;for(const dd of (MOBILE?(frameN%2?[]:[20,60]):[15,40,80])){const la=S.lat+Math.cos(S.heading)*dd/m,lo=S.lon+Math.sin(S.heading)*dd/(m*Math.cos(S.lat*Math.PI/180));const g=groundAt(lo,la);if(g!==null)ahead=Math.max(ahead,g);}
- lastAhead=ahead;window.__warn=false;if(ahead+4>S.h){window.__warn=true;S.pitch=Math.min(1.0,S.pitch+2.5*dt);S.h+=Math.min(ahead+4-S.h,15)*dt*2;}
- if(S.h<gnd+2){S.h=gnd+2;if(S.pitch<0)S.pitch=0;} if(S.h>gnd+8000)S.h=gnd+8000;
+ lastAhead=ahead;window.__warn=false;if(!S.hover&&ahead+4>S.h){window.__warn=true;S.pitch=Math.min(1.0,S.pitch+2.5*dt);S.h+=Math.min(ahead+4-S.h,15)*dt*2;}
+ if(S.h<gnd+2){S.h=gnd+2;if(S.hover)S.holdH=S.h;if(S.pitch<0)S.pitch=0;} if(S.h>gnd+8000)S.h=gnd+8000;
  for(let i=poops.length-1;i>=0;i--){const p=poops[i];p.vh-=9.8*dt;p.h+=p.vh*dt;p.lat+=Math.cos(p.hd)*p.vf*dt/m;p.lon+=Math.sin(p.hd)*p.vf*dt/(m*Math.cos(p.lat*Math.PI/180));
   const pg=groundAt(p.lon,p.lat)??0;if(p.h<=pg+0.05){viewer.entities.remove(p.ent);const r=Math.min(3,0.6+Math.abs(p.vh)*0.03);viewer.entities.add({position:C.Cartesian3.fromDegrees(p.lon,p.lat,pg+0.08),ellipse:{semiMajorAxis:r,semiMinorAxis:r*0.75,height:pg+0.08,rotation:Math.random()*3,material:C.Color.WHITE.withAlpha(.92)}});beep(160,60,.15,'triangle');poops.splice(i,1);splatFx(p.lon,p.lat,pg,Math.max(0,p.h0-pg));if(poopCam&&poopCam.p===p)poopCam.until=performance.now()+2500;}}
  stepDrops(dt);wormStep();
