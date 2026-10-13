@@ -1,4 +1,6 @@
-const C=Cesium;const ION=!!window.CESIUM_ION_TOKEN;if(ION)C.Ion.defaultAccessToken=window.CESIUM_ION_TOKEN;
+const C=Cesium;const MODELS={bald:{uri:'models/bald_eagle.glb',yaw:0,size:1.1,clip:0,cycles:2,glide:0.375}};
+const QP=new URLSearchParams(location.search);const MD=MODELS[QP.get('model')||'bald'];if(QP.get('yaw'))MD.yaw=+QP.get('yaw');if(QP.get('size'))MD.size=+QP.get('size');
+const ION=!!window.CESIUM_ION_TOKEN;if(ION)C.Ion.defaultAccessToken=window.CESIUM_ION_TOKEN;
 const viewer=new C.Viewer('c',{baseLayer:new C.ImageryLayer(new C.UrlTemplateImageryProvider({url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',maximumLevel:19,credit:'Esri World Imagery'})),
  ...(ION?{terrain:C.Terrain.fromWorldTerrain()}:{terrainProvider:new C.EllipsoidTerrainProvider()}),baseLayerPicker:false,geocoder:false,homeButton:false,sceneModePicker:false,navigationHelpButton:false,animation:false,timeline:false,fullscreenButton:false,infoBox:false,selectionIndicator:false,requestRenderMode:false,shouldAnimate:true});
 viewer.scene.globe.enableLighting=false;viewer.scene.skyAtmosphere.show=true;viewer.scene.fog.enabled=true;
@@ -39,15 +41,15 @@ async function start(lon,lat){if(mode!=='pick')return;mode='loading';$('banner')
  S.ground=b;mode='fly';nest={lon,lat,b};buildNest(lon,lat,b);$('banner').style.display='none';$('search').style.display='none';$('hud').style.display='block';
  Object.assign(S,{lon,lat,h:b+4,heading:0,pitch:C.Math.toRadians(20)});
  dyn.push(eagle);viewer.scene.screenSpaceCameraController.enableInputs=false;}
-let headEnt;const flap={phase:0,rate:1,bob:0};window.__flap=flap;let eagleScale=1,modelYaw=Math.PI/2,modelPitch=0,modelRoll=0;window.__orient=(y,p,r)=>{modelYaw=y;modelPitch=p;modelRoll=r};
+let headEnt;const flap={phase:0,rate:1,bob:0};window.__flap=flap;let eagleScale=1,modelYaw=MD.yaw,modelPitch=0,modelRoll=0;window.__orient=(y,p,r)=>{modelYaw=y;modelPitch=p;modelRoll=r};
 function makeEagle(){ const eq=()=>{const q=C.Transforms.headingPitchRollQuaternion(pos(),new C.HeadingPitchRoll(S.heading-Math.PI/2,S.pitch,S.roll));
     const fix=C.Quaternion.fromHeadingPitchRoll(new C.HeadingPitchRoll(modelYaw,modelPitch,modelRoll));return C.Quaternion.multiply(q,fix,new C.Quaternion())};
  eagle=viewer.entities.add({position:new C.CallbackProperty(()=>{const p=pos();return C.Cartesian3.fromDegrees(S.lon,S.lat,S.h+flap.bob);const m=C.Matrix3.fromQuaternion(eq());const o=C.Matrix3.multiplyByVector(m,window.__loc,new C.Cartesian3());return C.Cartesian3.subtract(p,o,new C.Cartesian3())},false),
-  orientation:new C.CallbackProperty(eq,false),model:{uri:'models/eagle.glb',scale:new C.CallbackProperty(()=>eagleScale,false),minimumPixelSize:0,runAnimations:false}});
+  orientation:new C.CallbackProperty(eq,false),model:{uri:MD.uri,scale:new C.CallbackProperty(()=>eagleScale,false),minimumPixelSize:0,runAnimations:false}});
  headEnt=eagle;
  const t=setInterval(()=>{try{const mp=viewer.dataSourceDisplay.defaultDataSource._visualizers.find(v=>v._modelHash)._modelHash[eagle.id].modelPrimitive;
-  if(mp&&mp.ready){clearInterval(t);const r=mp.boundingSphere.radius/eagleScale;eagleScale=0.95/r;window.__eagleR=r;window.__mp=mp;setTimeout(()=>{const inv=C.Matrix4.inverse(mp.modelMatrix,new C.Matrix4());const l=C.Matrix4.multiplyByPoint(inv,mp.boundingSphere.center,new C.Cartesian3());window.__loc=l;},800);
-   mp.activeAnimations.removeAll();mp.activeAnimations.addAll({loop:C.ModelAnimationLoop.REPEAT,animationTime:()=>flap.phase});window.__anims=mp.activeAnimations.length;}}catch(e){}},300);
+  if(mp&&mp.ready){clearInterval(t);const r=mp.boundingSphere.radius/eagleScale;eagleScale=MD.size/r;window.__eagleR=r;window.__mp=mp;setTimeout(()=>{const inv=C.Matrix4.inverse(mp.modelMatrix,new C.Matrix4());const l=C.Matrix4.multiplyByPoint(inv,mp.boundingSphere.center,new C.Cartesian3());window.__loc=l;},800);
+   mp.activeAnimations.removeAll();mp.activeAnimations.add({index:MD.clip,loop:C.ModelAnimationLoop.REPEAT,animationTime:()=>flap.phase});window.__anims=mp.activeAnimations.length;}}catch(e){}},300);
 }makeEagle();
 function pos(){return C.Cartesian3.fromDegrees(S.lon,S.lat,S.h)}
 function fwd(d,up){const m=111320;return C.Cartesian3.fromDegrees(S.lon+Math.sin(S.heading)*d*Math.cos(S.pitch)/(m*Math.cos(S.lat*Math.PI/180)),S.lat+Math.cos(S.heading)*d*Math.cos(S.pitch)/m,S.h+Math.sin(S.pitch)*d+up)}
@@ -72,8 +74,8 @@ viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Mat
  S.pitch+=(-ty*0.9-S.pitch*0.4)*dt*1.5;S.pitch=Math.max(-1.2,Math.min(1.0,S.pitch));
  S.boostT=Math.max(0,S.boostT-dt);const target=(S.boostT>0?70:22)-Math.sin(S.pitch)*8;S.speed+=(target-S.speed)*1.5*dt;
  {const climb=Math.max(0,S.pitch),dive=S.pitch<-0.22;let tr=dive?0:(0.55+climb*1.6+(S.boostT>0?1.0:0));tr=Math.min(1.9,tr);flap.rate+=(tr-flap.rate)*Math.min(1,3*dt);
- if(flap.rate<0.08){flap.phase=(flap.phase+((0.73-flap.phase+1.5)%1-0.5)*Math.min(1,2*dt)+1)%1;}else flap.phase=(flap.phase+flap.rate*dt)%1;
- flap.bob=-Math.sin(flap.phase*2*Math.PI)*0.05*Math.min(1,flap.rate);}
+ if(flap.rate<0.08){flap.phase=(flap.phase+((MD.glide-flap.phase+1.5)%1-0.5)*Math.min(1,4*dt)+1)%1;}else flap.phase=(flap.phase+flap.rate*dt/MD.cycles)%1;
+ if(window.__fixPhase!==undefined)flap.phase=window.__fixPhase;flap.bob=-Math.sin(flap.phase*MD.cycles*2*Math.PI)*0.05*Math.min(1,flap.rate);}
  document.body.classList.toggle('boosting',S.boostT>0);$('fx').className=S.boostT>0?'boosting':'';
  const m=111320,d=S.speed*dt*Math.cos(S.pitch);S.lat+=Math.cos(S.heading)*d/m;S.lon+=Math.sin(S.heading)*d/(m*Math.cos(S.lat*Math.PI/180));S.h+=Math.sin(S.pitch)*S.speed*dt;
  const g0=groundAt(S.lon,S.lat);if(g0!==null)S.ground=g0;const gnd=S.ground||0;
