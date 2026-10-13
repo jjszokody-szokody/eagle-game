@@ -102,4 +102,10 @@ function splatFx(lon,lat,g,dist){const t0=performance.now();const P=C.Cartesian3
  setTimeout(()=>{viewer.entities.remove(ring);pin.label.show=false;pin.point.pixelSize=7;},4000);
  const t=$('toast');t.textContent='💩 SPLAT! '+dist.toFixed(0)+' m below';t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,2500);}
 let camP=-0.21;viewer.scene.preRender.addEventListener(()=>{if(mode!=='fly')return;const back=S.boostT>0?2.6:1.9;const tp=Math.max(-1.1,Math.min(-0.18,-0.21+Math.min(0,S.pitch)*0.9));camP+=(tp-camP)*0.08;if(poopCam){if(performance.now()>poopCam.until)poopCam=null;else{const p=poopCam.p;viewer.camera.lookAt(C.Cartesian3.fromDegrees(p.lon,p.lat,p.h),new C.HeadingPitchRange(S.heading+0.5,-0.75,9));return;}}viewer.camera.lookAt(pos(),new C.HeadingPitchRange(S.heading,camP,back));});
-window.__game={S,teleport(lon,lat,h,hd){Object.assign(S,{lon,lat,h,heading:hd,pitch:0})},start,poop,boost,get mode(){return mode}};
+function endFlight(){if(mode!=='fly')return;mode='pick';poops.length=0;poopCam=null;S.hover=false;S.boostT=0;$('hover').classList.remove('on');window.__mp=null;
+ viewer.entities.removeAll();dyn.length=0;nest=null;makeEagle();
+ $('hud').style.display='none';$('banner').style.display='block';$('banner').innerHTML="🦅 Tap anywhere on Earth to build your eagle's nest<br><small>zoom in for precision (pinch / scroll)</small>";$('search').style.display='flex';
+ document.body.classList.remove('boosting');$('fx').className='';viewer.camera.lookAtTransform(C.Matrix4.IDENTITY);viewer.scene.screenSpaceCameraController.enableInputs=true;
+ viewer.camera.flyTo({destination:C.Cartesian3.fromDegrees(S.lon,S.lat,2.0e6),duration:1.5});}
+$('quit').addEventListener('pointerdown',e=>{e.preventDefault();endFlight()});
+window.__game={endFlight,S,teleport(lon,lat,h,hd){Object.assign(S,{lon,lat,h,heading:hd,pitch:0})},start,poop,boost,get mode(){return mode}};
