@@ -79,22 +79,36 @@ const jend=e=>{if(e.pointerId!==jid)return;jid=null;inp.x=inp.y=0;knob.style.lef
 $('boost').addEventListener('pointerdown',e=>{e.preventDefault();boost()});$('poop').addEventListener('pointerdown',e=>{e.preventDefault();poop()});$('hover').addEventListener('pointerdown',e=>{e.preventDefault();hover()});$('cam').addEventListener('pointerdown',e=>{e.preventDefault();toggleCam()});$('land').addEventListener('pointerdown',e=>{e.preventDefault();landBtn()});
 let actx;function beep(f1,f2,dur,type){try{actx=actx||new AudioContext();const o=actx.createOscillator(),g=actx.createGain();o.type=type;o.frequency.setValueAtTime(f1,actx.currentTime);o.frequency.exponentialRampToValueAtTime(f2,actx.currentTime+dur);g.gain.setValueAtTime(.25,actx.currentTime);g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+dur);o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+dur)}catch(e){}}
 function takeOff(){S.perched=false;S.landing=null;S.hover=false;$('hover').classList.remove('on');S.h+=0.6;S.pitch=0.35;S.speed=12;$('land').innerHTML='🛬<small>LAND</small>';beep(400,900,.3,'sine');}
+const withTO=(p,ms)=>Promise.race([p,new Promise((_,rj)=>setTimeout(()=>rj('timeout'),ms))]);
+let osmB=null;const osmFeat=new Map();
+async function ensureOsm(){if(osmB){if(!dyn.includes(osmB))dyn.push(osmB);return;}if(!ION)return;try{osmB=await C.createOsmBuildingsAsync();osmB.style=new C.Cesium3DTileStyle({color:"color('white',0.0)"});osmB.maximumScreenSpaceError=MOBILE?24:16;osmB.cacheBytes=32*1024*1024;
+ osmB.tileLoad.addEventListener(t=>{const c=t.content;if(!c||!c.featuresLength)return;for(let k=0;k<c.featuresLength;k++){const f=c.getFeature(k);const h=+f.getProperty('cesium#estimatedHeight');const la=+f.getProperty('cesium#latitude'),lo=+f.getProperty('cesium#longitude');if(h>0&&la&&lo)osmFeat.set(f.getProperty('elementId')||(la+','+lo),{lat:la,lon:lo,h,name:f.getProperty('name')});}});
+ viewer.scene.primitives.add(osmB);dyn.push(osmB);}catch(e){console.warn('osm buildings',e)}}
+async function overpassCands(lat,lon){const q='[out:json][timeout:8];(way["building"](around:250,'+lat+','+lon+');node["natural"="peak"](around:300,'+lat+','+lon+'););out tags center;';
+ const j=await (await withTO(fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}}),7000)).json();
+ return (j.elements||[]).map(e=>{const t=e.tags||{};const c=e.center||e;let h=parseFloat(t.height)||(parseFloat(t['building:levels'])*3.3)||0;return {lat:c.lat,lon:c.lon,h,peak:t.natural==='peak',ele:parseFloat(t.ele)||null,name:t.name}}).filter(c=>c.lat&&(c.h>0||c.peak));}
+async function gridMax(){const pts=[],N=9,R=250,cosl=Math.cos(S.lat*Math.PI/180);for(let i=0;i<N;i++)for(let j=0;j<N;j++){const dx=(i/(N-1)*2-1)*R,dy=(j/(N-1)*2-1)*R;if(Math.hypot(dx,dy)<=R)pts.push(C.Cartographic.fromDegrees(S.lon+dx/(111320*cosl),S.lat+dy/111320));}
+ let res=pts;try{res=await withTO(C.sampleTerrainMostDetailed(viewer.terrainProvider,pts.map(c=>c.clone())),5000);}catch(e){}let best=null;for(const c of res){const h=c.height??groundAt(C.Math.toDegrees(c.longitude),C.Math.toDegrees(c.latitude));if(h!=null&&(!best||h>best.h))best={lon:C.Math.toDegrees(c.longitude),lat:C.Math.toDegrees(c.latitude),h,src:'terrain'};}return best;}
+async function sampleTop(lon,lat){try{const [c]=await withTO(viewer.scene.sampleHeightMostDetailed([C.Cartographic.fromDegrees(lon,lat)],dyn),4000);if(c.height!=null)return c.height;}catch(e){}return groundAt(lon,lat);}
 async function landBtn(){if(mode!=='fly')return;if(S.perched||S.landing){takeOff();return;}
- toast('🔎 Looking for the highest perch…');const pts=[],N=9,R=250,cosl=Math.cos(S.lat*Math.PI/180);
- for(let i=0;i<N;i++)for(let j=0;j<N;j++){const dx=(i/(N-1)*2-1)*R,dy=(j/(N-1)*2-1)*R;if(Math.hypot(dx,dy)>R)continue;pts.push(C.Cartographic.fromDegrees(S.lon+dx/(111320*cosl),S.lat+dy/111320));}
- const withTO=(p,ms)=>Promise.race([p,new Promise((_,rj)=>setTimeout(()=>rj('timeout'),ms))]);let res=pts;try{res=await withTO(viewer.scene.sampleHeightMostDetailed(pts.map(c=>c.clone()),dyn),7000);}catch(e){res=pts;}
- let best=null;for(const c of res){let h=c.height;if(h===undefined||h===null){h=groundAt(C.Math.toDegrees(c.longitude),C.Math.toDegrees(c.latitude));}if(h!=null&&(!best||h>best.h))best={lon:C.Math.toDegrees(c.longitude),lat:C.Math.toDegrees(c.latitude),h};}
+ toast('🔎 Looking for the highest perch…');const lat0=S.lat,lon0=S.lon;let base=null;try{const [t]=await withTO(C.sampleTerrainMostDetailed(viewer.terrainProvider,[C.Cartographic.fromDegrees(lon0,lat0)]),4000);base=t.height;}catch(e){}if(base==null)base=S.ground||0;
+ let cands=[];try{cands=await overpassCands(lat0,lon0);}catch(e){console.warn('overpass unavailable, using OSM Buildings',e);}
+ if(!cands.length){await ensureOsm();if(osmB){const t0=performance.now();while(performance.now()-t0<6000){await new Promise(r=>setTimeout(r,500));if([...osmFeat.values()].some(f=>hdist(lon0,lat0,f.lon,f.lat)<250&&f.h>0)&&performance.now()-t0>2000)break;}
+  cands=[...osmFeat.values()].filter(f=>hdist(lon0,lat0,f.lon,f.lat)<=250);}}
+ // absolute estimates
+ let best=null;for(const c of cands){const abs=c.peak?(c.ele!=null?c.ele:base):base+c.h;if(!best||abs>best.abs)best={...c,abs,src:c.peak?'peak':'building'};}
+ const g=await gridMax();if(g&&(!best||g.h>best.abs)){best={lon:g.lon,lat:g.lat,abs:g.h,src:'terrain'};}
  if(!best){toast('No perch found');return;}
- // refine around best (fine grid 9 pts, 8 m)
- const fine=[];for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++)fine.push(C.Cartographic.fromDegrees(best.lon+i*8/(111320*cosl),best.lat+j*8/111320));try{const fr=await withTO(viewer.scene.sampleHeightMostDetailed(fine,dyn),5000);for(const c of fr)if(c.height!=null&&c.height>best.h)best={lon:C.Math.toDegrees(c.longitude),lat:C.Math.toDegrees(c.latitude),h:c.height};}catch(e){}
- let base=null;try{const [t]=await withTO(C.sampleTerrainMostDetailed(viewer.terrainProvider,[C.Cartographic.fromDegrees(best.lon,best.lat)]),4000);base=t.height;}catch(e){}
- const agl=base!=null?best.h-base:null;
- S.hover=true;S.speed=0;S.pitch=0;S.landing={from:{lon:S.lon,lat:S.lat,h:S.h},to:{lon:best.lon,lat:best.lat,h:best.h+0.07},t0:performance.now(),dur:Math.min(6000,Math.max(2500,hdist(S.lon,S.lat,best.lon,best.lat)*25)),agl,top:best.h};
- S.heading=Math.atan2((best.lon-S.lon)*cosl,best.lat-S.lat);$('land').innerHTML='🛫<small>TAKE OFF</small>';}
-function landStep(){const L=S.landing;if(!L)return;const k=Math.min(1,(performance.now()-L.t0)/L.dur),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+ // actual surface at target (may be low-res now; refined in flight)
+ let top=await sampleTop(best.lon,best.lat);if(top==null||(best.src==='building'&&top<best.abs-25))top=best.abs;
+ const L={from:{lon:S.lon,lat:S.lat,h:S.h},to:{lon:best.lon,lat:best.lat,h:top+0.07},t0:performance.now(),dur:Math.min(9000,Math.max(3500,hdist(S.lon,S.lat,best.lon,best.lat)*25)),base,top,name:best.name,src:best.src,lastRs:0};
+ S.hover=true;$('hover').classList.remove('on');S.speed=0;S.pitch=0;S.landing=L;const cosl=Math.cos(S.lat*Math.PI/180);S.heading=Math.atan2((best.lon-S.lon)*cosl,best.lat-S.lat);$('land').innerHTML='🛫<small>TAKE OFF</small>';
+ window.__landTarget=best;}
+async function resample(L){L.busy=true;const h=await sampleTop(L.to.lon,L.to.lat);if(h!=null&&!(L.src==='building'&&h<L.top-30)){L.top=h;L.to.h=h+0.07;}L.busy=false;}
+function landStep(){const L=S.landing;if(!L)return;if(!L.busy&&performance.now()-L.lastRs>1200){L.lastRs=performance.now();resample(L);}const k=Math.min(1,(performance.now()-L.t0)/L.dur),e=k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
  S.lon=L.from.lon+(L.to.lon-L.from.lon)*e;S.lat=L.from.lat+(L.to.lat-L.from.lat)*e;const arc=Math.sin(k*Math.PI)*Math.max(3,Math.abs(L.to.h-L.from.h)*0.3);
  S.holdH=S.h=L.from.h+(L.to.h-L.from.h)*e+arc;if(k>=1){S.landing=null;S.perched=true;S.holdH=S.h=L.to.h;beep(500,250,.25,'sine');
-  toast('🪶 Landed on highest point, '+(L.agl!=null?L.agl.toFixed(0)+' m above ground':L.top.toFixed(0)+' m elevation'));}}
+  toast('🪶 Landed on '+(L.name||('highest '+(L.src==='building'?'rooftop':L.src==='peak'?'peak':'point')))+', '+Math.max(0,L.top-L.base).toFixed(0)+' m above ground');}}
 function hover(){if(mode!=='fly')return;if(S.perched||S.landing){takeOff();return;}S.hover=!S.hover;if(S.hover){S.holdH=S.h;S.speed=0;S.pitch=0;S.roll=0;}$('hover').classList.toggle('on',S.hover);beep(S.hover?700:400,S.hover?400:700,.25,'sine')}
 function boost(){if(mode!=='fly')return;if(S.perched||S.landing){takeOff();}if(S.hover){S.hover=false;$('hover').classList.remove('on');}S.boostT=3;beep(200,900,.6,'sawtooth')}
 const poops=[];
@@ -207,11 +221,15 @@ function chirp(n){for(let i=0;i<n;i++)setTimeout(()=>beep(2400+Math.random()*900
 function toast(msg){const t=$('toast');t.textContent=msg;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,2500);}
 function wormStep(){if(!nest)return;const now=performance.now();if(dn2()<80&&now-lastChirp>2500+Math.random()*2000){lastChirp=now;chirp(2);}landmarkStep();}
 let lmPins=[],lmLast=null,lmT=0,lmBusy=false,lmSeen=new Set(),lmCache={};
+const LM_BAD=/radio|television|tv station|broadcast|organi[sz]ation|company|corporation|advocacy|non-profit|nonprofit|record label|band|newspaper|magazine|shooting|crash|accident|attack|bombing|murder|riot|disaster|restaurant|law firm|bank|agency|software|retail|chain|neighbou?rhood|census|area of|former|defunct|demolished|subway station|rail station|bus|school district|^$/i;
+const LM_GOOD=[[/monument|memorial|statue|landmark|historic|national register/i,5],[/museum|cathedral|castle|palace|tower|bridge|stadium|observatory|lighthouse|temple|mosque|church|basilica/i,4],[/skyscraper|park|garden|square|theat|opera|library|zoo|aquarium|fountain|plaza/i,3],[/mountain|peak|summit|lake|island|waterfall|canyon|beach|forest|river/i,4],[/building|hotel|university|college/i,1]];
 async function landmarkFetch(){lmBusy=true;try{const key=S.lat.toFixed(2)+','+S.lon.toFixed(2);let list=lmCache[key];
- if(!list){const u='https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+S.lat.toFixed(5)+'|'+S.lon.toFixed(5)+'&gsradius=5000&gslimit=60&format=json&origin=*';
-  const j=await (await fetch(u)).json();list=(j.query&&j.query.geosearch||[]).filter(g=>!/^List of|disambiguation|shooting|bombing|attack|incident|murder|crash|riot|^[WK][A-Z]{2,3}(-[A-Z]{1,3})?$|^(19|20)\d\d /i.test(g.title));lmCache[key]=list;}
+ if(!list){const u='https://en.wikipedia.org/w/api.php?action=query&generator=geosearch&ggscoord='+S.lat.toFixed(5)+'|'+S.lon.toFixed(5)+'&ggsradius=5000&ggslimit=80&prop=description|coordinates&format=json&origin=*';
+  const j=await (await fetch(u)).json();list=Object.values((j.query&&j.query.pages)||{}).filter(p=>p.coordinates&&p.coordinates[0]).map(p=>{const d=p.description||'';let sc=0;for(const [re,v] of LM_GOOD)if(re.test(d)||re.test(p.title))sc=Math.max(sc,v);
+   return {title:p.title,pageid:p.pageid,lat:p.coordinates[0].lat,lon:p.coordinates[0].lon,desc:d,score:sc}}).filter(g=>g.score>0&&!LM_BAD.test(g.desc)&&!/\((19|20)\d\d/.test(g.title));lmCache[key]=list;}
  lmPins.forEach(p=>viewer.entities.remove(p.ent));lmPins=[];
- const pick=[];for(const g of list.slice().sort((a,b)=>a.dist-b.dist)){if(pick.length>=10)break;if(pick.some(q=>hdist(q.lon,q.lat,g.lon,g.lat)<60))continue;pick.push(g);}pick.forEach(g=>{const ent=viewer.entities.add({position:C.Cartesian3.fromDegrees(g.lon,g.lat,0),
+ list.forEach(g=>g.dist=hdist(S.lon,S.lat,g.lon,g.lat));
+ const pick=[];for(const g of list.slice().sort((a,b)=>(b.score-a.score)||(a.dist-b.dist))){if(pick.length>=10)break;if(pick.some(q=>hdist(q.lon,q.lat,g.lon,g.lat)<60))continue;pick.push(g);}pick.forEach(g=>{const ent=viewer.entities.add({position:C.Cartesian3.fromDegrees(g.lon,g.lat,0),
   point:{pixelSize:7,color:C.Color.fromCssColorString('#ffd24a').withAlpha(.9),outlineColor:C.Color.BLACK.withAlpha(.6),outlineWidth:1,heightReference:C.HeightReference.CLAMP_TO_GROUND,disableDepthTestDistance:1e9},
   label:{text:'📍 '+g.title,font:'12px system-ui',fillColor:C.Color.WHITE,outlineColor:C.Color.BLACK,outlineWidth:3,style:C.LabelStyle.FILL_AND_OUTLINE,heightReference:C.HeightReference.RELATIVE_TO_GROUND,pixelOffset:new C.Cartesian2(0,-12),scaleByDistance:new C.NearFarScalar(200,1.1,5000,0.55),translucencyByDistance:new C.NearFarScalar(3000,1,6000,0.3),distanceDisplayCondition:new C.DistanceDisplayCondition(0,6000),disableDepthTestDistance:1e9}});
   lmPins.push({ent,g});});lmLast={lon:S.lon,lat:S.lat};}catch(e){console.warn('landmarks',e)}lmBusy=false;lmT=performance.now();}
