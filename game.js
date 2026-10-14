@@ -55,7 +55,7 @@ async function start(lon,lat){if(mode!=='pick')return;mode='loading';$('banner')
  viewer.camera.setView({destination:C.Cartesian3.fromDegrees(lon,lat-0.004,500),orientation:{pitch:C.Math.toRadians(-45)}});
  let b=0;try{if(ION){const [t]=await C.sampleTerrainMostDetailed(viewer.terrainProvider,[C.Cartographic.fromDegrees(lon,lat)]);b=t.height||0;}}catch(e){}
  if(tiles){for(let i=0;i<40&&!tiles.tilesLoaded;i++)await new Promise(r=>setTimeout(r,250));try{const [c]=await viewer.scene.sampleHeightMostDetailed([C.Cartographic.fromDegrees(lon,lat)]);if(c.height!==undefined)b=c.height;}catch(e){}}
- S.ground=b;window.__setSunFor&&window.__setSunFor(lon);mode='fly';nest={lon,lat,b};buildNest(lon,lat,b);addChicks(lon,lat,b);$('banner').style.display='none';$('search').style.display='none';$('hud').style.display='block';
+ S.ground=b;setTimeout(()=>ensureOsm(),2000);window.__setSunFor&&window.__setSunFor(lon);mode='fly';nest={lon,lat,b};buildNest(lon,lat,b);addChicks(lon,lat,b);$('banner').style.display='none';$('search').style.display='none';$('hud').style.display='block';
  Object.assign(S,{lon,lat,h:b+4,heading:0,pitch:C.Math.toRadians(20)});
  dyn.push(eagle);viewer.scene.screenSpaceCameraController.enableInputs=false;}
 let headEnt;const flap={phase:0,rate:1,bob:0};window.__flap=flap;let eagleScale=1,modelYaw=MD.yaw,modelPitch=0,modelRoll=0;window.__orient=(y,p,r)=>{modelYaw=y;modelPitch=p;modelRoll=r};
@@ -93,7 +93,7 @@ async function sampleTop(lon,lat){try{const [c]=await withTO(viewer.scene.sample
 async function landBtn(){if(mode!=='fly')return;if(S.perched||S.landing){takeOff();return;}
  toast('🔎 Looking for the highest perch…');const lat0=S.lat,lon0=S.lon;let base=null;try{const [t]=await withTO(C.sampleTerrainMostDetailed(viewer.terrainProvider,[C.Cartographic.fromDegrees(lon0,lat0)]),4000);base=t.height;}catch(e){}if(base==null)base=S.ground||0;
  let cands=[];try{cands=await overpassCands(lat0,lon0);}catch(e){console.warn('overpass unavailable, using OSM Buildings',e);}
- if(!cands.length){await ensureOsm();if(osmB){const t0=performance.now();while(performance.now()-t0<6000){await new Promise(r=>setTimeout(r,500));if([...osmFeat.values()].some(f=>hdist(lon0,lat0,f.lon,f.lat)<250&&f.h>0)&&performance.now()-t0>2000)break;}
+ if(!cands.length){await ensureOsm();if(osmB){const t0=performance.now();while(performance.now()-t0<12000){await new Promise(r=>setTimeout(r,500));if([...osmFeat.values()].some(f=>hdist(lon0,lat0,f.lon,f.lat)<250&&f.h>0)&&performance.now()-t0>2000)break;}
   cands=[...osmFeat.values()].filter(f=>hdist(lon0,lat0,f.lon,f.lat)<=250);}}
  // absolute estimates
  let best=null;for(const c of cands){const abs=c.peak?(c.ele!=null?c.ele:base):base+c.h;if(!best||abs>best.abs)best={...c,abs,src:c.peak?'peak':'building'};}
