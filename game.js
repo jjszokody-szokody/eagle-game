@@ -82,7 +82,7 @@ function takeOff(){S.perched=false;S.landing=null;S.hover=false;$('hover').class
 async function landBtn(){if(mode!=='fly')return;if(S.perched||S.landing){takeOff();return;}
  toast('🔎 Looking for the highest perch…');const pts=[],N=9,R=250,cosl=Math.cos(S.lat*Math.PI/180);
  for(let i=0;i<N;i++)for(let j=0;j<N;j++){const dx=(i/(N-1)*2-1)*R,dy=(j/(N-1)*2-1)*R;if(Math.hypot(dx,dy)>R)continue;pts.push(C.Cartographic.fromDegrees(S.lon+dx/(111320*cosl),S.lat+dy/111320));}
- const withTO=(p,ms)=>Promise.race([p,new Promise((_,rj)=>setTimeout(()=>rj('timeout'),ms))]);let res=pts;
+ const withTO=(p,ms)=>Promise.race([p,new Promise((_,rj)=>setTimeout(()=>rj('timeout'),ms))]);let res=pts;try{res=await withTO(viewer.scene.sampleHeightMostDetailed(pts.map(c=>c.clone()),dyn),7000);}catch(e){res=pts;}
  let best=null;for(const c of res){let h=c.height;if(h===undefined||h===null){h=groundAt(C.Math.toDegrees(c.longitude),C.Math.toDegrees(c.latitude));}if(h!=null&&(!best||h>best.h))best={lon:C.Math.toDegrees(c.longitude),lat:C.Math.toDegrees(c.latitude),h};}
  if(!best){toast('No perch found');return;}
  // refine around best (fine grid 9 pts, 8 m)
