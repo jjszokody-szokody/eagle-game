@@ -13,7 +13,7 @@ let gradeStage=null,rsCapF=QTDEF[QT].rs;
 function applyQuality(){const d=QTDEF[QT];const dpr=window.devicePixelRatio||1;rsCapF=d.rs;
  viewer.resolutionScale=Math.min(dpr,d.rs)/dpr;viewer.scene.globe.maximumScreenSpaceError=d.globe;
  if(tiles){tiles.maximumScreenSpaceError=d.sse;tiles.dynamicScreenSpaceErrorFactor=d.dyn;tiles.foveatedMinimumScreenSpaceErrorRelaxation=d.relax;tiles.cacheBytes=d.cache*1024*1024;tiles.maximumCacheOverflowBytes=(MOBILE?24:64)*1024*1024;}
- viewer.scene.fog.density=d.fog;viewer.scene.postProcessStages.fxaa.enabled=QMSAA<=1;if(gradeStage)gradeStage.enabled=QT!=='low';
+ viewer.scene.fog.density=d.fog;viewer.scene.postProcessStages.fxaa.enabled=QMSAA<=1;if(gradeStage)gradeStage.enabled=QT==='high';
  const wantShadow=!MOBILE&&QT==='high';try{viewer.shadowMap.enabled=wantShadow;if(wantShadow){viewer.shadowMap.size=1024;viewer.shadowMap.type=C.ShadowMapType.PCF_SOFT;viewer.shadowMap.darkness=0.35;}}catch(e){}
  const b=$('qual');if(b)b.innerHTML='🎨<small>'+QMODE.toUpperCase()+'</small>';}
 if(!LEGGFX){const dpr=window.devicePixelRatio||1;viewer.useBrowserRecommendedResolution=false;viewer.targetFrameRate=60;
