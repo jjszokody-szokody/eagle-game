@@ -162,7 +162,7 @@ viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Mat
 
  // HUD
  const dx=(nest.lon-S.lon)*m*Math.cos(S.lat*Math.PI/180),dy=(nest.lat-S.lat)*m,dist=Math.hypot(dx,dy),brg=Math.atan2(dx,dy)-S.heading;
- $('arrow').querySelector('span').style.transform=`rotate(${brg}rad)`;$('dist').textContent=dist<1000?dist.toFixed(0)+' m':(dist/1000).toFixed(1)+' km';
+ $('arrow').querySelector('span').style.transform=`rotate(${brg}rad)`;updCompass(S.heading,Math.atan2(dx,dy));$('dist').textContent=dist<1000?dist.toFixed(0)+' m':(dist/1000).toFixed(1)+' km';
  $('stats').innerHTML=(S.perched?'🪶 PERCHED · ':S.landing?'🛬 LANDING · ':S.hover?'🪽 HOVER · ':'')+`Alt ${(S.h-gnd).toFixed(0)} m AGL${window.__warn?' · ⚠️ PULL UP':''} · ${(S.speed*3.6).toFixed(0)} km/h${S.boostT>0?' · 🔥BOOST':''}`;
 });
 viewer.camera.setView({destination:C.Cartesian3.fromDegrees(-92.1,46.78,2.0e7)});
@@ -271,4 +271,18 @@ try{new PerformanceObserver(l=>{PERF.longTasks+=l.getEntries().length}).observe(
 viewer.scene.postRender.addEventListener(()=>{const n=performance.now();if(PERF.last)PERF.ft.push(n-PERF.last);PERF.last=n;if(PERF.ft.length>20000)PERF.ft.splice(0,10000);
  if(mode==='fly'&&PERF.firstFlight===null)PERF.firstFlight=n;if(fpsEl&&PERF.ft.length%15===0){const a=PERF.ft.slice(-60);const avg=a.reduce((x,y)=>x+y,0)/a.length;fpsEl.textContent=(1000/avg).toFixed(0)+' fps · '+Math.max(...a).toFixed(0)+' ms max';}});
 const fpsEl=location.search.includes('fps')?Object.assign(document.body.appendChild(document.createElement('div')),{style:'position:fixed;left:50%;top:2px;transform:translateX(-50%);z-index:99;color:#0f0;font:11px monospace;background:rgba(0,0,0,.5);padding:1px 5px;pointer-events:none'}):null;
+// ---- compass tape
+const CPX=2;(function(){const st=$('cstrip');if(!st)return;let h='';for(let d=-360;d<=720;d+=15){const n=((d%360)+360)%360;const lab={0:'N',45:'NE',90:'E',135:'SE',180:'S',225:'SW',270:'W',315:'NW'}[n];
+ h+='<i class="'+(lab?'maj':'min')+'" style="left:'+((d+360)*CPX)+'px"></i>'+(lab?'<b class="'+(n===0?'n':'')+'" style="left:'+((d+360)*CPX)+'px">'+lab+'</b>':(n%30===0?'<em style="left:'+((d+360)*CPX)+'px">'+n+'</em>':''));}st.innerHTML=h;})();
+function updCompass(hd,nestBrg){const deg=((hd*180/Math.PI)%360+360)%360;const w=$('compass').clientWidth;$('cstrip').style.transform='translateX('+(w/2-(deg+360)*CPX)+'px)';$('cdeg').textContent=Math.round(deg)+'°';
+ if(nest){let rel=((nestBrg-hd)*180/Math.PI+540)%360-180;const half=w/2/CPX-4;const nm=$('cnest');nm.classList.toggle('edge',Math.abs(rel)>half);rel=Math.max(-half,Math.min(half,rel));nm.style.left=(w/2+rel*CPX)+'px';}}
+window.__compass=()=>({deg:$('cdeg').textContent});
+// ---- auto-hide controls
+let lastInput=performance.now();const IDLE_MS=4000;
+function wake(){lastInput=performance.now();document.body.classList.remove('idle');}
+['pointerdown','touchstart','keydown','mousemove','wheel'].forEach(ev=>addEventListener(ev,e=>{const was=document.body.classList.contains('idle');wake();
+ if(was&&(ev==='pointerdown'||ev==='touchstart')&&e.target.closest&&e.target.closest('#btns')){e.preventDefault();e.stopPropagation();}},{capture:true,passive:false}));
+setInterval(()=>{const armed=quitArmed&&Date.now()-quitArmed<3000;const joyActive=typeof jid!=='undefined'&&jid!==null;
+ if(mode==='fly'&&!armed&&!joyActive&&performance.now()-lastInput>IDLE_MS)document.body.classList.add('idle');else if(mode!=='fly'||armed)document.body.classList.remove('idle');},250);
+window.__idle=()=>document.body.classList.contains('idle');
 window.__game={endFlight,cycleQuality,applyQuality,landBtn,takeOff,toggleCam,get fp(){return fp},worms:()=>worms,nest:()=>nest,get carried(){return carried},grab,dropWorms,get score(){return score},S,teleport(lon,lat,h,hd){Object.assign(S,{lon,lat,h,heading:hd,pitch:0})},start,poop,boost,get mode(){return mode}};
