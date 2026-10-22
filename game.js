@@ -1,8 +1,8 @@
-const C=Cesium;const LEGGFX=location.search.includes('legacygfx');const MOBILE=matchMedia('(pointer:coarse)').matches||/Mobi|Android|iPhone|iPad/.test(navigator.userAgent);const MODELS={bald:{uri:'models/bald_eagle.glb',yaw:0,size:0.28,clip:0,cycles:2,glide:0.375}};
+const C=Cesium;const LEGGFX=location.search.includes('legacygfx');const MOBILE=matchMedia('(pointer:coarse)').matches||/Mobi|Android|iPhone|iPad/.test(navigator.userAgent);const MODELS={bald:{uri:'models/bald_eagle.glb?v=3',yaw:0,size:0.28,clip:0,cycles:2,glide:0.375}};
 const QP=new URLSearchParams(location.search);const MD=MODELS[QP.get('model')||'bald'];if(QP.get('yaw'))MD.yaw=+QP.get('yaw');if(QP.get('size'))MD.size=+QP.get('size');
 const QVALID=['low','medium','high','auto'];let QMODE=(QP.get('quality')||localStorage.getItem('eagleQuality')||'auto').toLowerCase();if(!QVALID.includes(QMODE))QMODE='auto';
 let QT=QMODE==='auto'?(MOBILE?'medium':'high'):QMODE;const QMSAA=location.search.includes('msaa')?4:(QT==='high'?4:(QT==='medium'&&!MOBILE?2:1));
-const QTDEF={low:{sse:16,dyn:55,relax:16,rs:MOBILE?0.8:1.0,cache:MOBILE?64:128,fog:7e-4,globe:2.5},medium:{sse:8,dyn:35,relax:8,rs:MOBILE?1.0:1.25,cache:MOBILE?96:256,fog:5.5e-4,globe:2},high:{sse:4,dyn:22,relax:0,rs:MOBILE?1.15:1.5,cache:MOBILE?96:384,fog:4e-4,globe:1.5}};
+const QTDEF={low:{sse:16,dyn:55,relax:16,rs:MOBILE?0.8:1.0,cache:MOBILE?64:128,fog:7e-4,globe:MOBILE?5:3},medium:{sse:8,dyn:35,relax:8,rs:MOBILE?1.0:1.25,cache:MOBILE?96:256,fog:5.5e-4,globe:MOBILE?4:2.5},high:{sse:4,dyn:22,relax:0,rs:MOBILE?1.15:1.5,cache:MOBILE?96:384,fog:4e-4,globe:MOBILE?3:2}};
 window.__quality={get mode(){return QMODE},get tier(){return QT},msaa:QMSAA};
 const ION=!!window.CESIUM_ION_TOKEN;if(ION)C.Ion.defaultAccessToken=window.CESIUM_ION_TOKEN;
 const viewer=new C.Viewer('c',{baseLayer:new C.ImageryLayer(new C.UrlTemplateImageryProvider({url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',maximumLevel:19,credit:'Esri World Imagery'})),
@@ -48,11 +48,13 @@ let tiles=null;window.__tilesReady=false;
 
   viewer.scene.fog.enabled=true;viewer.scene.fog.density=MOBILE?6e-4:4.5e-4;viewer.scene.fog.screenSpaceErrorFactor=6;viewer.scene.fog.minimumBrightness=0.15;
   viewer.scene.globe.maximumScreenSpaceError=MOBILE?2:1.5;}
+ try{tiles.enableCollision=false;}catch(e){}// otherwise Scene reads tile geometry back from the GPU every frame for camera collision
  window.__tileset=tiles;if(!LEG)applyQuality();viewer.scene.primitives.add(tiles);window.__tilesReady=true;}})();
 const dyn=[];// entities to exclude from height sampling
+function terrainAt(lon,lat){const c=C.Cartographic.fromDegrees(lon,lat,0,_tc);const t=viewer.scene.globe.getHeight(c);return t===undefined?null:t;}const _tc=new C.Cartographic();
 function groundAt(lon,lat){const c=C.Cartographic.fromDegrees(lon,lat);let h;try{h=viewer.scene.sampleHeightSupported?viewer.scene.sampleHeight(c,dyn):undefined}catch(e){}
  const t=viewer.scene.globe.getHeight(c);if(h===undefined||(t!==undefined&&h<t-30))h=t;return h===undefined?null:h;}
-const $=id=>document.getElementById(id);
+const $=id=>document.getElementById(id);const arrowEl=$('arrow').querySelector('span'),statsEl=$('stats');
 let mode='pick',nest=null,eagle=null;
 // geocode search (Nominatim, free)
 $('go').onclick=async()=>{try{const r=await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent($('q').value));const j=await r.json();if(j[0])viewer.camera.flyTo({destination:C.Cartesian3.fromDegrees(+j[0].lon,+j[0].lat,3000)});}catch(e){}};
@@ -87,9 +89,13 @@ function makeEagle(){ const eq=()=>{const q=C.Transforms.headingPitchRollQuatern
   orientation:new C.CallbackProperty(eq,false),model:{shadows:C.ShadowMode.ENABLED,imageBasedLightingFactor:new C.Cartesian2(1.1,1.1),uri:MD.uri,scale:new C.CallbackProperty(()=>eagleScale,false),minimumPixelSize:0,runAnimations:false}});
  headEnt=eagle;
  const t=setInterval(()=>{try{const mp=viewer.dataSourceDisplay.defaultDataSource._visualizers.find(v=>v._modelHash)._modelHash[eagle.id].modelPrimitive;
-  if(mp&&mp.ready){clearInterval(t);try{mp.maximumAnisotropy=8;}catch(e){}const r=mp.boundingSphere.radius/eagleScale;eagleScale=MD.size/r;window.__eagleR=r;window.__mp=mp;setTimeout(()=>{const inv=C.Matrix4.inverse(mp.modelMatrix,new C.Matrix4());const l=C.Matrix4.multiplyByPoint(inv,mp.boundingSphere.center,new C.Cartesian3());window.__loc=l;},800);
+  if(mp&&mp.ready){clearInterval(t);patchSkin(mp);try{mp.maximumAnisotropy=8;}catch(e){}const r=mp.boundingSphere.radius/eagleScale;eagleScale=MD.size/r;window.__eagleR=r;window.__mp=mp;setTimeout(()=>{const inv=C.Matrix4.inverse(mp.modelMatrix,new C.Matrix4());const l=C.Matrix4.multiplyByPoint(inv,mp.boundingSphere.center,new C.Cartesian3());window.__loc=l;},800);
    mp.activeAnimations.removeAll();mp.activeAnimations.add({index:MD.clip,loop:C.ModelAnimationLoop.REPEAT,animationTime:()=>flap.phase});window.__anims=mp.activeAnimations.length;}}catch(e){}},300);
 }makeEagle();
+// Cesium 1.122 recomputes ALL skin joint matrices once per scene-graph node, every frame (O(nodes x joints)).
+// Run it once per update instead; joint matrices are only read at draw time, so the result is identical.
+function patchSkin(mp){try{const sg=mp._sceneGraph;if(!sg||typeof sg.update!=='function'||typeof sg.updateJointMatrices!=='function')return;const P=Object.getPrototypeOf(sg);if(P.__eagleSkinPatch)return;
+ const up=P.update,uj=P.updateJointMatrices,noop=function(){};P.update=function(fs,dirty){this.updateJointMatrices=noop;try{up.call(this,fs,dirty);}finally{delete this.updateJointMatrices;}if(dirty&&this._skinnedNodes&&this._skinnedNodes.length)uj.call(this);};P.__eagleSkinPatch=1;window.__skinPatched=true;}catch(e){console.warn('skin patch',e)}}
 function pos(){return C.Cartesian3.fromDegrees(S.lon,S.lat,S.h)}
 function fwd(d,up){const m=111320;return C.Cartesian3.fromDegrees(S.lon+Math.sin(S.heading)*d*Math.cos(S.pitch)/(m*Math.cos(S.lat*Math.PI/180)),S.lat+Math.cos(S.heading)*d*Math.cos(S.pitch)/m,S.h+Math.sin(S.pitch)*d+up)}
 // --- input
@@ -136,6 +142,19 @@ function boost(){if(mode!=='fly')return;if(S.perched||S.landing){takeOff();}if(S
 const poops=[];
 function poop(){if(mode!=='fly')return;beep(500,80,.35,'square');const p={lon:S.lon,lat:S.lat,h:S.h-0.3,vh:Math.sin(S.pitch)*S.speed,vf:S.speed*Math.cos(S.pitch)*0.9,hd:S.heading,h0:S.h};poopCam={p,until:Infinity};
  p.ent=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(p.lon,p.lat,p.h),false),ellipsoid:{radii:new C.Cartesian3(.12,.12,.18),material:C.Color.WHITE}});dyn.push(p.ent);poops.push(p);}
+function heightTick(){if(mode!=='fly')return;const now=performance.now(),m=111320;
+ const agl0=S.h-(S.ground||0),still=!!(S.hover||S.perched||S.landing),sInt=still?300:agl0>300?700:agl0>40?400:(MOBILE?200:150);
+ if((now-lastSampleT)>sInt){lastSampleT=now;const AH=[20,60];const cosl=Math.cos(S.lat*Math.PI/180);
+  const moved=Math.abs(S.lon-lastSP.lon)+Math.abs(S.lat-lastSP.lat)>2e-5;// ~2 m
+  const far=agl0>900&&!S.hover,skip=still&&!moved&&now-lastStillS<1500;// high above everything: terrain only; hovering/perched in place: ground can't change
+  const slot=still?0:(sampleSlot=(sampleSlot+1)%4);const tg=terrainAt(S.lon,S.lat);let ahead=-1e9;
+  if(!skip&&slot%2===0){lastSP.lon=S.lon;lastSP.lat=S.lat;lastStillS=now;const g0=far?tg:groundAt(S.lon,S.lat);if(g0!==null)S.ground=g0;else if(tg!==null)S.ground=tg;}
+  for(let k=0;k<AH.length;k++){const dd=AH[k],la=S.lat+Math.cos(S.heading)*dd/m,lo=S.lon+Math.sin(S.heading)*dd/(m*cosl);const t=terrainAt(lo,la);
+   if(far)aheadS[k]=-1e9;else if(!still&&slot===(k?3:1)){const g=groundAt(lo,la);aheadS[k]=g!==null?g:(t??-1e9);aheadH[k]=S.heading;}
+   ahead=Math.max(ahead,t??-1e9,Math.abs(S.heading-aheadH[k])<0.35?aheadS[k]:-1e9);}
+  if(tg!==null&&(S.ground==null||S.ground<tg-30))S.ground=tg;lastAhead=ahead;}
+}
+viewer.scene.preRender.addEventListener(heightTick);
 // --- loop
 let last=performance.now();
 viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Math.min(.05,(now-last)/1000);last=now;if(mode!=='fly')return;
@@ -148,25 +167,27 @@ viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Mat
  {const climb=Math.max(0,S.pitch),dive=!S.hover&&S.pitch<-0.22;let tr=S.hover?0:dive?0:(0.55+climb*1.6+(S.boostT>0?1.0:0));tr=Math.min(S.hover?2.4:1.9,tr);flap.rate+=(tr-flap.rate)*Math.min(1,(dive?9:3)*dt);
  if((dive||S.hover)&&flap.rate<0.35){flap.phase=(flap.phase+((MD.glide-flap.phase+1.5)%1-0.5)*Math.min(1,7*dt)+1)%1;}else flap.phase=(flap.phase+flap.rate*dt/MD.cycles)%1;
  if(window.__fixPhase!==undefined)flap.phase=window.__fixPhase;flap.bob=(S.perched||S.landing)?0:S.hover?Math.sin(performance.now()/450)*0.02:-Math.sin(flap.phase*MD.cycles*2*Math.PI)*0.025*Math.min(1,flap.rate);}
- document.body.classList.toggle('boosting',S.boostT>0);$('fx').className=S.boostT>0?'boosting':'';
+ {const bz=S.boostT>0;if(bz!==fxBoost){fxBoost=bz;document.body.classList.toggle('boosting',bz);$('fx').className=bz?'boosting':'';}}
  const m=111320,d=S.hover?0:S.speed*dt*Math.cos(S.pitch);if(!S.hover)S.lat+=Math.cos(S.heading)*d/m;S.lon+=Math.sin(S.heading)*d/(m*Math.cos(S.lat*Math.PI/180));if(!S.hover)S.h+=Math.sin(S.pitch)*S.speed*dt;
- const doSample=(performance.now()-lastSampleT)>(MOBILE?150:110);if(doSample){lastSampleT=performance.now();const g0=groundAt(S.lon,S.lat);if(g0!==null)S.ground=g0;}const gnd=S.ground||0;
- // look-ahead collision avoidance (mountains/buildings)
- frameN=(frameN+1)%1000;let ahead=doSample?-1e9:lastAhead;for(const dd of (doSample?(MOBILE?[20,60]:[15,40,80]):[])){const la=S.lat+Math.cos(S.heading)*dd/m,lo=S.lon+Math.sin(S.heading)*dd/(m*Math.cos(S.lat*Math.PI/180));const g=groundAt(lo,la);if(g!==null)ahead=Math.max(ahead,g);}
- lastAhead=ahead;window.__warn=false;if(!S.hover&&ahead+4>S.h){window.__warn=true;S.pitch=Math.min(1.0,S.pitch+2.5*dt);S.h+=Math.min(ahead+4-S.h,15)*dt*2;}
+ // height sampling: scene.sampleHeight forces a GPU pick render + synchronous readPixels (very costly on phones),
+ // so do at most ONE per tick, round-robin over [here, ahead1, here, ahead2]; cheap CPU terrain heights fill the gaps every tick.
+ const gnd=S.ground||0,ahead=lastAhead;window.__warn=false;if(!S.hover&&ahead+4>S.h){window.__warn=true;S.pitch=Math.min(1.0,S.pitch+2.5*dt);S.h+=Math.min(ahead+4-S.h,15)*dt*2;}
  if(!S.perched&&!S.landing&&S.h<gnd+2){S.h=gnd+2;if(S.hover)S.holdH=S.h;if(S.pitch<0)S.pitch=0;} if(S.h>gnd+8000)S.h=gnd+8000;
  for(let i=poops.length-1;i>=0;i--){const p=poops[i];p.vh-=9.8*dt;p.h+=p.vh*dt;p.lat+=Math.cos(p.hd)*p.vf*dt/m;p.lon+=Math.sin(p.hd)*p.vf*dt/(m*Math.cos(p.lat*Math.PI/180));
-  if(p.gT===undefined||performance.now()-p.gT>100||p.h<(p.g??0)+3){p.gT=performance.now();p.g=groundAt(p.lon,p.lat)??p.g??0;}const pg=p.g;if(p.h<=pg+0.05){viewer.entities.remove(p.ent);const r=Math.min(3,0.6+Math.abs(p.vh)*0.03);viewer.entities.add({position:C.Cartesian3.fromDegrees(p.lon,p.lat,pg+0.08),ellipse:{semiMajorAxis:r,semiMinorAxis:r*0.75,height:pg+0.08,rotation:Math.random()*3,material:C.Color.WHITE.withAlpha(.92)}});beep(160,60,.15,'triangle');poops.splice(i,1);splatFx(p.lon,p.lat,pg,Math.max(0,p.h0-pg));if(poopCam&&poopCam.p===p)poopCam.until=performance.now()+2500;}}
+  if(p.gT===undefined||(p.h<(p.g??0)+40&&now-p.gT>(p.h<(p.g??0)+4?60:220))||now-p.gT>600){p.gT=now;p.g=(p.h<(p.g??-1e9)+40||p.g===undefined?groundAt(p.lon,p.lat):terrainAt(p.lon,p.lat))??p.g??0;}const pg=p.g;if(p.h<=pg+0.05){viewer.entities.remove(p.ent);const r=Math.min(3,0.6+Math.abs(p.vh)*0.03);viewer.entities.add({position:C.Cartesian3.fromDegrees(p.lon,p.lat,pg+0.08),ellipse:{semiMajorAxis:r,semiMinorAxis:r*0.75,height:pg+0.08,rotation:Math.random()*3,material:C.Color.WHITE.withAlpha(.92)}});beep(160,60,.15,'triangle');poops.splice(i,1);splatFx(p.lon,p.lat,pg,Math.max(0,p.h0-pg));if(poopCam&&poopCam.p===p)poopCam.until=performance.now()+2500;}}
  stepDrops(dt);wormStep();
  // chase cam
 
  // HUD
  const dx=(nest.lon-S.lon)*m*Math.cos(S.lat*Math.PI/180),dy=(nest.lat-S.lat)*m,dist=Math.hypot(dx,dy),brg=Math.atan2(dx,dy)-S.heading;
- $('arrow').querySelector('span').style.transform=`rotate(${brg}rad)`;updCompass(S.heading,Math.atan2(dx,dy));$('dist').textContent=dist<1000?dist.toFixed(0)+' m':(dist/1000).toFixed(1)+' km';
- $('stats').innerHTML=(S.perched?'🪶 PERCHED · ':S.landing?'🛬 LANDING · ':S.hover?'🪽 HOVER · ':'')+`Alt ${(S.h-gnd).toFixed(0)} m AGL${window.__warn?' · ⚠️ PULL UP':''} · ${(S.speed*3.6).toFixed(0)} km/h${S.boostT>0?' · 🔥BOOST':''}`;
+ updCompass(S.heading,Math.atan2(dx,dy));
+ if(now-hudT>100){hudT=now;const b=Math.round(brg*50)/50;if(b!==hudBrg){hudBrg=b;arrowEl.style.transform='rotate('+b+'rad)';}
+  const ds=dist<1000?dist.toFixed(0)+' m':(dist/1000).toFixed(1)+' km';if(ds!==hudDist){hudDist=ds;$('dist').textContent=ds;}
+  const st=(S.perched?'🪶 PERCHED · ':S.landing?'🛬 LANDING · ':S.hover?'🪽 HOVER · ':'')+`Alt ${(S.h-gnd).toFixed(0)} m AGL${window.__warn?' · ⚠️ PULL UP':''} · ${(S.speed*3.6).toFixed(0)} km/h${S.boostT>0?' · 🔥BOOST':''}`;if(st!==hudStats){hudStats=st;statsEl.textContent=st;}
+  const cs=dist<500;if(cs!==chickShow){chickShow=cs;for(const e of chicks)e.show=cs;}}
 });
 viewer.camera.setView({destination:C.Cartesian3.fromDegrees(-92.1,46.78,2.0e7)});
-let lastSampleT=0,poopCam=null,frameN=0,lastAhead=-1e9;window.__poopCam=()=>poopCam;
+let lastSampleT=0,poopCam=null,frameN=0,lastAhead=-1e9,sampleSlot=0;const aheadS=[-1e9,-1e9],aheadH=[0,0],lastSP={lon:0,lat:0,h:0};let lastStillS=0;let hudT=0,hudStats='',hudDist='',hudBrg=1e9,fxBoost=null,chickShow=true;window.__poopCam=()=>poopCam;
 const drops=[];function spray(lon,lat,g){for(let i=0;i<26;i++){const a=Math.random()*6.283,v=1.5+Math.random()*3;const d={lon,lat,h:g+0.1,vx:Math.cos(a)*v,vy:Math.sin(a)*v,vz:2+Math.random()*4,life:1.6};
  d.ent=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(d.lon,d.lat,d.h),false),point:{pixelSize:5+Math.random()*5,color:C.Color.WHITE.withAlpha(.95),outlineColor:C.Color.fromCssColorString('#ddd8c8'),outlineWidth:1}});drops.push(d);}}
 function stepDrops(dt){const m=111320;for(let i=drops.length-1;i>=0;i--){const d=drops[i];d.vz-=9.8*dt;d.h+=d.vz*dt;d.lat+=d.vy*dt/m;d.lon+=d.vx*dt/(m*Math.cos(d.lat*Math.PI/180));d.life-=dt;
@@ -249,11 +270,11 @@ async function landmarkFetch(){lmBusy=true;try{const key=S.lat.toFixed(2)+','+S.
  if(!list){const u='https://en.wikipedia.org/w/api.php?action=query&generator=geosearch&ggscoord='+S.lat.toFixed(5)+'|'+S.lon.toFixed(5)+'&ggsradius=5000&ggslimit=80&prop=description|coordinates&format=json&origin=*';
   const j=await (await fetch(u)).json();list=Object.values((j.query&&j.query.pages)||{}).filter(p=>p.coordinates&&p.coordinates[0]).map(p=>{const d=p.description||'';let sc=0;for(const [re,v] of LM_GOOD)if(re.test(d)||re.test(p.title))sc=Math.max(sc,v);
    return {title:p.title,pageid:p.pageid,lat:p.coordinates[0].lat,lon:p.coordinates[0].lon,desc:d,score:sc}}).filter(g=>g.score>0&&!LM_BAD.test(g.desc)&&!/\((19|20)\d\d/.test(g.title));lmCache[key]=list;}
- lmPins.forEach(p=>viewer.entities.remove(p.ent));lmPins=[];
  list.forEach(g=>g.dist=hdist(S.lon,S.lat,g.lon,g.lat));
- const pick=[];for(const g of list.slice().sort((a,b)=>(b.score-a.score)||(a.dist-b.dist))){if(pick.length>=10)break;if(pick.some(q=>hdist(q.lon,q.lat,g.lon,g.lat)<60))continue;pick.push(g);}pick.forEach(g=>{const ent=viewer.entities.add({position:C.Cartesian3.fromDegrees(g.lon,g.lat,0),
-  point:{pixelSize:7,color:C.Color.fromCssColorString('#ffd24a').withAlpha(.9),outlineColor:C.Color.BLACK.withAlpha(.6),outlineWidth:1,heightReference:C.HeightReference.CLAMP_TO_GROUND,disableDepthTestDistance:1e9},
-  label:{text:'📍 '+g.title,font:'12px system-ui',fillColor:C.Color.WHITE,outlineColor:C.Color.BLACK,outlineWidth:3,style:C.LabelStyle.FILL_AND_OUTLINE,heightReference:C.HeightReference.RELATIVE_TO_GROUND,pixelOffset:new C.Cartesian2(0,-12),scaleByDistance:new C.NearFarScalar(200,1.1,5000,0.55),translucencyByDistance:new C.NearFarScalar(3000,1,6000,0.3),distanceDisplayCondition:new C.DistanceDisplayCondition(0,6000),disableDepthTestDistance:1e9}});
+ const pick=[];for(const g of list.slice().sort((a,b)=>(b.score-a.score)||(a.dist-b.dist))){if(pick.length>=10)break;if(pick.some(q=>hdist(q.lon,q.lat,g.lon,g.lat)<60))continue;pick.push(g);}if(mode!=='fly'){lmBusy=false;return;}let hs=null;try{hs=await withTO(C.sampleTerrainMostDetailed(viewer.terrainProvider,pick.map(g=>C.Cartographic.fromDegrees(g.lon,g.lat))),4000);}catch(e){}
+ if(mode!=='fly'){lmBusy=false;return;}lmPins.forEach(p=>viewer.entities.remove(p.ent));lmPins=[];pick.forEach((g,i)=>{const gh=(hs&&hs[i]&&hs[i].height!=null)?hs[i].height:(terrainAt(g.lon,g.lat)??0);const ent=viewer.entities.add({position:C.Cartesian3.fromDegrees(g.lon,g.lat,gh+3),
+  point:{pixelSize:7,color:C.Color.fromCssColorString('#ffd24a').withAlpha(.9),outlineColor:C.Color.BLACK.withAlpha(.6),outlineWidth:1,disableDepthTestDistance:1e9},
+  label:{text:'📍 '+g.title,font:'12px system-ui',fillColor:C.Color.WHITE,outlineColor:C.Color.BLACK,outlineWidth:3,style:C.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new C.Cartesian2(0,-12),scaleByDistance:new C.NearFarScalar(200,1.1,5000,0.55),translucencyByDistance:new C.NearFarScalar(3000,1,6000,0.3),distanceDisplayCondition:new C.DistanceDisplayCondition(0,6000),disableDepthTestDistance:1e9}});
   lmPins.push({ent,g});});lmLast={lon:S.lon,lat:S.lat};}catch(e){console.warn('landmarks',e)}lmBusy=false;lmT=performance.now();}
 function landmarkStep(){const now=performance.now();if(!lmBusy&&now-lmT>15000&&(!lmLast||hdist(S.lon,S.lat,lmLast.lon,lmLast.lat)>800))landmarkFetch();
  for(const p of lmPins){if(!lmSeen.has(p.g.pageid)&&hdist(S.lon,S.lat,p.g.lon,p.g.lat)<300){lmSeen.add(p.g.pageid);toast('📍 Nearby: '+p.g.title);}}}
@@ -274,8 +295,10 @@ const fpsEl=location.search.includes('fps')?Object.assign(document.body.appendCh
 // ---- compass tape
 const CPX=2;(function(){const st=$('cstrip');if(!st)return;let h='';for(let d=-360;d<=720;d+=15){const n=((d%360)+360)%360;const lab={0:'N',45:'NE',90:'E',135:'SE',180:'S',225:'SW',270:'W',315:'NW'}[n];
  h+='<i class="'+(lab?'maj':'min')+'" style="left:'+((d+360)*CPX)+'px"></i>'+(lab?'<b class="'+(n===0?'n':'')+'" style="left:'+((d+360)*CPX)+'px">'+lab+'</b>':(n%30===0?'<em style="left:'+((d+360)*CPX)+'px">'+n+'</em>':''));}st.innerHTML=h;})();
-function updCompass(hd,nestBrg){const deg=((hd*180/Math.PI)%360+360)%360;const w=$('compass').clientWidth;$('cstrip').style.transform='translateX('+(w/2-(deg+360)*CPX)+'px)';$('cdeg').textContent=Math.round(deg)+'°';
- if(nest){let rel=((nestBrg-hd)*180/Math.PI+540)%360-180;const half=w/2/CPX-4;const nm=$('cnest');nm.classList.toggle('edge',Math.abs(rel)>half);rel=Math.max(-half,Math.min(half,rel));nm.style.left=(w/2+rel*CPX)+'px';}}
+const CMP={w:0,tx:null,deg:null,nl:null,edge:null,strip:$('cstrip'),cdeg:$('cdeg'),nm:$('cnest'),box:$('compass')};addEventListener('resize',()=>CMP.w=0);
+function updCompass(hd,nestBrg){const deg=((hd*180/Math.PI)%360+360)%360;if(!CMP.w)CMP.w=CMP.box.clientWidth||150;const w=CMP.w;
+ const tx=Math.round((w/2-(deg+360)*CPX)*2)/2;if(tx!==CMP.tx){CMP.tx=tx;CMP.strip.style.transform='translate3d('+tx+'px,0,0)';}const dg=Math.round(deg)%360;if(dg!==CMP.deg){CMP.deg=dg;CMP.cdeg.textContent=dg+'°';}
+ if(nest){let rel=((nestBrg-hd)*180/Math.PI+540)%360-180;const half=w/2/CPX-4;const ed=Math.abs(rel)>half;if(ed!==CMP.edge){CMP.edge=ed;CMP.nm.classList.toggle('edge',ed);}rel=Math.max(-half,Math.min(half,rel));const nl=Math.round(w/2+rel*CPX);if(nl!==CMP.nl){CMP.nl=nl;CMP.nm.style.left=nl+'px';}}}
 window.__compass=()=>({deg:$('cdeg').textContent});
 // ---- auto-hide controls
 let lastInput=performance.now();const IDLE_MS=4000;
