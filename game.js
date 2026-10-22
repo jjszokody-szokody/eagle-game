@@ -106,7 +106,7 @@ joy.addEventListener('pointerdown',e=>{jid=e.pointerId;joy.setPointerCapture(jid
 const jend=e=>{if(e.pointerId!==jid)return;jid=null;inp.x=inp.y=0;knob.style.left=knob.style.top='45px'};joy.addEventListener('pointerup',jend);joy.addEventListener('pointercancel',jend);
 $('boost').addEventListener('pointerdown',e=>{e.preventDefault();boost()});$('poop').addEventListener('pointerdown',e=>{e.preventDefault();poop()});$('hover').addEventListener('pointerdown',e=>{e.preventDefault();hover()});$('qual').addEventListener('pointerdown',e=>{e.preventDefault();cycleQuality()});$('cam').addEventListener('pointerdown',e=>{e.preventDefault();toggleCam()});$('land').addEventListener('pointerdown',e=>{e.preventDefault();landBtn()});
 let actx;function beep(f1,f2,dur,type){try{actx=actx||new AudioContext();const o=actx.createOscillator(),g=actx.createGain();o.type=type;o.frequency.setValueAtTime(f1,actx.currentTime);o.frequency.exponentialRampToValueAtTime(f2,actx.currentTime+dur);g.gain.setValueAtTime(.25,actx.currentTime);g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+dur);o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+dur)}catch(e){}}
-function takeOff(){S.perched=false;S.landing=null;S.hover=false;$('hover').classList.remove('on');S.h+=0.6;S.pitch=0.35;S.speed=12;$('land').innerHTML='🛬<small>LAND</small>';beep(400,900,.3,'sine');}
+function takeOff(){if(S.crash)return;CR.graceT=performance.now()+1500;S.perched=false;S.landing=null;S.hover=false;$('hover').classList.remove('on');S.h+=0.6;S.pitch=0.35;S.speed=12;$('land').innerHTML='🛬<small>LAND</small>';beep(400,900,.3,'sine');}
 const withTO=(p,ms)=>Promise.race([p,new Promise((_,rj)=>setTimeout(()=>rj('timeout'),ms))]);
 let osmB=null;const osmFeat=new Map();
 async function ensureOsm(){if(osmB){if(!dyn.includes(osmB))dyn.push(osmB);return;}if(!ION)return;try{osmB=await C.createOsmBuildingsAsync();osmB.style=new C.Cesium3DTileStyle({color:"color('white',0.0)"});osmB.maximumScreenSpaceError=MOBILE?24:16;osmB.cacheBytes=32*1024*1024;
@@ -118,7 +118,7 @@ async function overpassCands(lat,lon){const q='[out:json][timeout:8];(way["build
 async function gridMax(){const pts=[],N=9,R=250,cosl=Math.cos(S.lat*Math.PI/180);for(let i=0;i<N;i++)for(let j=0;j<N;j++){const dx=(i/(N-1)*2-1)*R,dy=(j/(N-1)*2-1)*R;if(Math.hypot(dx,dy)<=R)pts.push(C.Cartographic.fromDegrees(S.lon+dx/(111320*cosl),S.lat+dy/111320));}
  let res=pts;try{res=await withTO(C.sampleTerrainMostDetailed(viewer.terrainProvider,pts.map(c=>c.clone())),5000);}catch(e){}let best=null;for(const c of res){const h=c.height??groundAt(C.Math.toDegrees(c.longitude),C.Math.toDegrees(c.latitude));if(h!=null&&(!best||h>best.h))best={lon:C.Math.toDegrees(c.longitude),lat:C.Math.toDegrees(c.latitude),h,src:'terrain'};}return best;}
 async function sampleTop(lon,lat){try{const [c]=await withTO(viewer.scene.sampleHeightMostDetailed([C.Cartographic.fromDegrees(lon,lat)],dyn),4000);if(c.height!=null)return c.height;}catch(e){}return groundAt(lon,lat);}
-async function landBtn(){if(mode!=='fly')return;if(S.perched||S.landing){takeOff();return;}
+async function landBtn(){if(S.crash)return;if(mode!=='fly')return;if(S.perched||S.landing){takeOff();return;}
  toast('🔎 Looking for the highest perch…');const lat0=S.lat,lon0=S.lon;let base=null;try{const [t]=await withTO(C.sampleTerrainMostDetailed(viewer.terrainProvider,[C.Cartographic.fromDegrees(lon0,lat0)]),4000);base=t.height;}catch(e){}if(base==null)base=S.ground||0;
  let cands=[];try{cands=await overpassCands(lat0,lon0);}catch(e){console.warn('overpass unavailable, using OSM Buildings',e);}
  if(!cands.length){await ensureOsm();if(osmB){const t0=performance.now();while(performance.now()-t0<12000){await new Promise(r=>setTimeout(r,500));if([...osmFeat.values()].some(f=>hdist(lon0,lat0,f.lon,f.lat)<250&&f.h>0)&&performance.now()-t0>2000)break;}
@@ -137,27 +137,27 @@ function landStep(){const L=S.landing;if(!L)return;if(!L.busy&&performance.now()
  S.lon=L.from.lon+(L.to.lon-L.from.lon)*e;S.lat=L.from.lat+(L.to.lat-L.from.lat)*e;const arc=Math.sin(k*Math.PI)*Math.max(3,Math.abs(L.to.h-L.from.h)*0.3);
  S.holdH=S.h=L.from.h+(L.to.h-L.from.h)*e+arc;if(k>=1){S.landing=null;S.perched=true;S.holdH=S.h=L.to.h;beep(500,250,.25,'sine');
   toast('🪶 Landed on '+(L.name||('highest '+(L.src==='building'?'rooftop':L.src==='peak'?'peak':'point')))+', '+Math.max(0,L.top-L.base).toFixed(0)+' m above ground');}}
-function hover(){if(mode!=='fly')return;if(S.perched||S.landing){takeOff();return;}S.hover=!S.hover;if(S.hover){S.holdH=S.h;S.speed=0;S.pitch=0;S.roll=0;}$('hover').classList.toggle('on',S.hover);beep(S.hover?700:400,S.hover?400:700,.25,'sine')}
-function boost(){if(mode!=='fly')return;if(S.perched||S.landing){takeOff();}if(S.hover){S.hover=false;$('hover').classList.remove('on');}S.boostT=3;beep(200,900,.6,'sawtooth')}
+function hover(){if(S.crash)return;if(mode!=='fly')return;if(S.perched||S.landing){takeOff();return;}S.hover=!S.hover;if(S.hover){S.holdH=S.h;S.speed=0;S.pitch=0;S.roll=0;}$('hover').classList.toggle('on',S.hover);beep(S.hover?700:400,S.hover?400:700,.25,'sine')}
+function boost(){if(S.crash)return;if(mode!=='fly')return;if(S.perched||S.landing){takeOff();}if(S.hover){S.hover=false;$('hover').classList.remove('on');}S.boostT=3;beep(200,900,.6,'sawtooth')}
 const poops=[];
-function poop(){if(mode!=='fly')return;beep(500,80,.35,'square');const p={lon:S.lon,lat:S.lat,h:S.h-0.3,vh:Math.sin(S.pitch)*S.speed,vf:S.speed*Math.cos(S.pitch)*0.9,hd:S.heading,h0:S.h};poopCam={p,until:Infinity};
+function poop(){if(S.crash)return;if(mode!=='fly')return;beep(500,80,.35,'square');const p={lon:S.lon,lat:S.lat,h:S.h-0.3,vh:Math.sin(S.pitch)*S.speed,vf:S.speed*Math.cos(S.pitch)*0.9,hd:S.heading,h0:S.h};poopCam={p,until:Infinity};
  p.ent=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(p.lon,p.lat,p.h),false),ellipsoid:{radii:new C.Cartesian3(.12,.12,.18),material:C.Color.WHITE}});dyn.push(p.ent);poops.push(p);}
-function heightTick(){if(mode!=='fly')return;const now=performance.now(),m=111320;
- const agl0=S.h-(S.ground||0),still=!!(S.hover||S.perched||S.landing),sInt=still?300:agl0>300?700:agl0>40?400:(MOBILE?200:150);
- if((now-lastSampleT)>sInt){lastSampleT=now;const AH=[20,60];const cosl=Math.cos(S.lat*Math.PI/180);
+function heightTick(){if(mode!=='fly'||S.crash)return;if(crProbeStep())return;const now=performance.now(),m=111320;
+ const agl0=S.h-(S.ground||0),still=!!(S.hover||S.perched||S.landing),sInt=still?300:Math.min(agl0>300?700:agl0>40?400:(MOBILE?200:150),S.speed>30?220:1e9);
+ if((now-lastSampleT)>sInt){lastSampleT=now;const AH=[Math.max(20,S.speed*0.6),Math.max(60,S.speed*1.8)];const cosl=Math.cos(S.lat*Math.PI/180);
   const moved=Math.abs(S.lon-lastSP.lon)+Math.abs(S.lat-lastSP.lat)>2e-5;// ~2 m
   const far=agl0>900&&!S.hover,skip=still&&!moved&&now-lastStillS<1500;// high above everything: terrain only; hovering/perched in place: ground can't change
-  const slot=still?0:(sampleSlot=(sampleSlot+1)%4);const tg=terrainAt(S.lon,S.lat);let ahead=-1e9;
-  if(!skip&&slot%2===0){lastSP.lon=S.lon;lastSP.lat=S.lat;lastStillS=now;const g0=far?tg:groundAt(S.lon,S.lat);if(g0!==null)S.ground=g0;else if(tg!==null)S.ground=tg;}
+  const slot=still?0:(sampleSlot=(sampleSlot+1)%4);const tg=terrainAt(S.lon,S.lat);let ahead=-1e9;aheadB=-1e9;
+  if(!skip&&slot%2===0){lastSP.lon=S.lon;lastSP.lat=S.lat;lastStillS=now;const g0=far?tg:groundAt(S.lon,S.lat);if(!far&&crGroundSample(S.ground,g0,tg))return;if(g0!==null)S.ground=g0;else if(tg!==null)S.ground=tg;}
   for(let k=0;k<AH.length;k++){const dd=AH[k],la=S.lat+Math.cos(S.heading)*dd/m,lo=S.lon+Math.sin(S.heading)*dd/(m*cosl);const t=terrainAt(lo,la);
-   if(far)aheadS[k]=-1e9;else if(!still&&slot===(k?3:1)){const g=groundAt(lo,la);aheadS[k]=g!==null?g:(t??-1e9);aheadH[k]=S.heading;}
-   ahead=Math.max(ahead,t??-1e9,Math.abs(S.heading-aheadH[k])<0.35?aheadS[k]:-1e9);}
+   if(far)aheadS[k]=-1e9;else if(!still&&slot===(k?3:1)){const g=groundAt(lo,la);aheadS[k]=g!==null?g:(t??-1e9);aheadH[k]=S.heading;crAheadSample(dd,g,t);}
+   ahead=Math.max(ahead,t??-1e9);aheadB=Math.max(aheadB,Math.abs(S.heading-aheadH[k])<0.35?aheadS[k]:-1e9);}
   if(tg!==null&&(S.ground==null||S.ground<tg-30))S.ground=tg;lastAhead=ahead;}
 }
 viewer.scene.preRender.addEventListener(heightTick);
 // --- loop
 let last=performance.now();
-viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Math.min(.05,(now-last)/1000);last=now;if(mode!=='fly')return;
+viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Math.min(.05,(now-last)/1000);last=now;if(mode!=='fly')return;if(S.crash){crashStep(dt,now);return;}crParticlesOnly(dt);
  let tx=inp.x+((keys.d||keys.arrowright)?1:0)-((keys.a||keys.arrowleft)?1:0),ty=inp.y+((keys.s||keys.arrowdown)?1:0)-((keys.w||keys.arrowup)?1:0);
  tx=Math.max(-1,Math.min(1,tx));ty=Math.max(-1,Math.min(1,ty));
  if((S.perched||S.landing)&&Math.hypot(tx,ty)>0.35)takeOff();if(S.landing)landStep();if(S.perched||S.landing){tx=0;ty=0;}
@@ -171,7 +171,7 @@ viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Mat
  const m=111320,d=S.hover?0:S.speed*dt*Math.cos(S.pitch);if(!S.hover)S.lat+=Math.cos(S.heading)*d/m;S.lon+=Math.sin(S.heading)*d/(m*Math.cos(S.lat*Math.PI/180));if(!S.hover)S.h+=Math.sin(S.pitch)*S.speed*dt;
  // height sampling: scene.sampleHeight forces a GPU pick render + synchronous readPixels (very costly on phones),
  // so do at most ONE per tick, round-robin over [here, ahead1, here, ahead2]; cheap CPU terrain heights fill the gaps every tick.
- const gnd=S.ground||0,ahead=lastAhead;window.__warn=false;if(!S.hover&&ahead+4>S.h){window.__warn=true;S.pitch=Math.min(1.0,S.pitch+2.5*dt);S.h+=Math.min(ahead+4-S.h,15)*dt*2;}
+ crWallCheck();if(S.crash)return;crSafeTick(now);const gnd=S.ground||0,ahead=lastAhead;window.__warn=!S.hover&&!S.perched&&!S.landing&&aheadB+2>S.h;if(!S.hover&&ahead+4>S.h){window.__warn=true;S.pitch=Math.min(1.0,S.pitch+2.5*dt);S.h+=Math.min(ahead+4-S.h,15)*dt*2;}
  if(!S.perched&&!S.landing&&S.h<gnd+2){S.h=gnd+2;if(S.hover)S.holdH=S.h;if(S.pitch<0)S.pitch=0;} if(S.h>gnd+8000)S.h=gnd+8000;
  for(let i=poops.length-1;i>=0;i--){const p=poops[i];p.vh-=9.8*dt;p.h+=p.vh*dt;p.lat+=Math.cos(p.hd)*p.vf*dt/m;p.lon+=Math.sin(p.hd)*p.vf*dt/(m*Math.cos(p.lat*Math.PI/180));
   if(p.gT===undefined||(p.h<(p.g??0)+40&&now-p.gT>(p.h<(p.g??0)+4?60:220))||now-p.gT>600){p.gT=now;p.g=(p.h<(p.g??-1e9)+40||p.g===undefined?groundAt(p.lon,p.lat):terrainAt(p.lon,p.lat))??p.g??0;}const pg=p.g;if(p.h<=pg+0.05){viewer.entities.remove(p.ent);const r=Math.min(3,0.6+Math.abs(p.vh)*0.03);viewer.entities.add({position:C.Cartesian3.fromDegrees(p.lon,p.lat,pg+0.08),ellipse:{semiMajorAxis:r,semiMinorAxis:r*0.75,height:pg+0.08,rotation:Math.random()*3,material:C.Color.WHITE.withAlpha(.92)}});beep(160,60,.15,'triangle');poops.splice(i,1);splatFx(p.lon,p.lat,pg,Math.max(0,p.h0-pg));if(poopCam&&poopCam.p===p)poopCam.until=performance.now()+2500;}}
@@ -187,7 +187,7 @@ viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Mat
   const cs=dist<500;if(cs!==chickShow){chickShow=cs;for(const e of chicks)e.show=cs;}}
 });
 viewer.camera.setView({destination:C.Cartesian3.fromDegrees(-92.1,46.78,2.0e7)});
-let lastSampleT=0,poopCam=null,frameN=0,lastAhead=-1e9,sampleSlot=0;const aheadS=[-1e9,-1e9],aheadH=[0,0],lastSP={lon:0,lat:0,h:0};let lastStillS=0;let hudT=0,hudStats='',hudDist='',hudBrg=1e9,fxBoost=null,chickShow=true;window.__poopCam=()=>poopCam;
+let lastSampleT=0,poopCam=null,frameN=0,lastAhead=-1e9,sampleSlot=0;let aheadB=-1e9;const aheadS=[-1e9,-1e9],aheadH=[0,0],lastSP={lon:0,lat:0,h:0};let lastStillS=0;let hudT=0,hudStats='',hudDist='',hudBrg=1e9,fxBoost=null,chickShow=true;window.__poopCam=()=>poopCam;
 const drops=[];function spray(lon,lat,g){for(let i=0;i<26;i++){const a=Math.random()*6.283,v=1.5+Math.random()*3;const d={lon,lat,h:g+0.1,vx:Math.cos(a)*v,vy:Math.sin(a)*v,vz:2+Math.random()*4,life:1.6};
  d.ent=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(d.lon,d.lat,d.h),false),point:{pixelSize:5+Math.random()*5,color:C.Color.WHITE.withAlpha(.95),outlineColor:C.Color.fromCssColorString('#ddd8c8'),outlineWidth:1}});drops.push(d);}}
 function stepDrops(dt){const m=111320;for(let i=drops.length-1;i>=0;i--){const d=drops[i];d.vz-=9.8*dt;d.h+=d.vz*dt;d.lat+=d.vy*dt/m;d.lon+=d.vx*dt/(m*Math.cos(d.lat*Math.PI/180));d.life-=dt;
@@ -198,10 +198,10 @@ function splatFx(lon,lat,g,dist){spray(lon,lat,g);drops.forEach(d=>{if(d.g0===un
   label:{text:'SPLAT! '+dist.toFixed(0)+' m below',font:'bold 18px sans-serif',fillColor:C.Color.WHITE,outlineColor:C.Color.BLACK,outlineWidth:4,style:C.LabelStyle.FILL_AND_OUTLINE,pixelOffset:new C.Cartesian2(0,-22),disableDepthTestDistance:1e9}});
  setTimeout(()=>{viewer.entities.remove(ring);pin.label.show=false;pin.point.pixelSize=7;},4000);
  const t=$('toast');t.textContent='💩 SPLAT! '+dist.toFixed(0)+' m below';t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,2500);}
-let camP=-0.21,camH=0;viewer.scene.preRender.addEventListener(()=>{if(mode!=='fly')return;const back=S.boostT>0?1.4:1.0;const tp=Math.max(-1.1,Math.min(-0.18,-0.21+Math.min(0,S.pitch)*0.9));camP+=(tp-camP)*0.08;if(poopCam){if(performance.now()>poopCam.until)poopCam=null;else{const p=poopCam.p;viewer.camera.lookAt(C.Cartesian3.fromDegrees(p.lon,p.lat,p.h),poopCam.close?new C.HeadingPitchRange(S.heading+0.6+(performance.now()%20000)/6000,-0.45,3.2):new C.HeadingPitchRange(S.heading+0.5,-0.75,9));return;}}if(fp&&!poopCam&&!window.__camOv){if(eagle)eagle.show=false;viewer.camera.lookAtTransform(C.Matrix4.IDENTITY);
+let camP=-0.21,camH=0;viewer.scene.preRender.addEventListener(()=>{if(mode!=='fly')return;if(S.crash){crashCam();return;}const back=S.boostT>0?1.4:1.0;const tp=Math.max(-1.1,Math.min(-0.18,-0.21+Math.min(0,S.pitch)*0.9));camP+=(tp-camP)*0.08;if(poopCam){if(performance.now()>poopCam.until)poopCam=null;else{const p=poopCam.p;viewer.camera.lookAt(C.Cartesian3.fromDegrees(p.lon,p.lat,p.h),poopCam.close?new C.HeadingPitchRange(S.heading+0.6+(performance.now()%20000)/6000,-0.45,3.2):new C.HeadingPitchRange(S.heading+0.5,-0.75,9));return;}}if(fp&&!poopCam&&!window.__camOv){if(eagle)eagle.show=false;viewer.camera.lookAtTransform(C.Matrix4.IDENTITY);
   const b2=Math.sin(flap.phase*MD.cycles*2*Math.PI)*0.02*Math.min(1,flap.rate);viewer.camera.setView({destination:C.Cartesian3.fromDegrees(S.lon+Math.sin(S.heading)*0.13/(m2*Math.cos(S.lat*Math.PI/180)),S.lat+Math.cos(S.heading)*0.13/m2,S.h+0.04+b2+flap.bob),orientation:{heading:S.heading,pitch:S.pitch-0.12,roll:S.roll}});return;}
  if(eagle)eagle.show=true;if(window.__camOv){const o=window.__camOv;viewer.camera.lookAt(o.at?C.Cartesian3.fromDegrees(o.at[0],o.at[1],o.at[2]):pos(),new C.HeadingPitchRange(S.heading+o.dh,o.p,o.r));return;}viewer.camera.lookAt(pos(),new C.HeadingPitchRange((camH+=(((S.heading-camH+Math.PI*3)%(Math.PI*2))-Math.PI)*0.25),camP,back));});
-function saveState(force){if(mode!=='fly'||!nest)return;try{sessionStorage.setItem('eagleFlight',JSON.stringify({nest,S:{lon:S.lon,lat:S.lat,h:S.h,heading:S.heading,pitch:S.pitch},t:Date.now()}))}catch(e){}}
+function saveState(force){if(mode!=='fly'||!nest)return;try{sessionStorage.setItem('eagleFlight',JSON.stringify({nest,S:crSaveS()||{lon:S.lon,lat:S.lat,h:S.h,heading:S.heading,pitch:S.pitch},t:Date.now()}))}catch(e){}}
 setInterval(saveState,2000);addEventListener('pagehide',()=>saveState(true));document.addEventListener('visibilitychange',()=>{if(document.hidden)saveState(true)});
 async function resumeSaved(){let st;try{st=JSON.parse(sessionStorage.getItem('eagleFlight')||'null')}catch(e){}if(!st||!st.nest)return;
  await start(st.nest.lon,st.nest.lat);Object.assign(S,st.S);S.pitch=Math.max(0,S.pitch);console.log('resumed flight');}
@@ -281,7 +281,7 @@ function landmarkStep(){const now=performance.now();if(!lmBusy&&now-lmT>15000&&(
 window.__lm=()=>lmPins.map(p=>p.g.title);
 function dn2(){return hdist(S.lon,S.lat,nest.lon,nest.lat)}
 function endFlight(){if(mode!=='fly')return;try{sessionStorage.removeItem('eagleFlight')}catch(e){}mode='pick';poops.length=0;drops.length=0;worms=[];carried=0;carryEnt=null;falling=[];grabTarget=null;lmPins=[];lmLast=null;lmT=0;S.perched=false;S.landing=null;chicks=[];$('arrow').classList.remove('carry');poopCam=null;S.hover=false;S.boostT=0;$('hover').classList.remove('on');window.__mp=null;
- viewer.entities.removeAll();dyn.length=0;nest=null;makeEagle();
+ crReset();viewer.entities.removeAll();dyn.length=0;nest=null;makeEagle();
  $('hud').style.display='none';$('banner').style.display='block';$('banner').innerHTML="🦅 Tap anywhere on Earth to build your eagle's nest<br><small>zoom in for precision (pinch / scroll)</small>";$('search').style.display='flex';
  document.body.classList.remove('boosting');$('fx').className='';viewer.camera.lookAtTransform(C.Matrix4.IDENTITY);viewer.scene.screenSpaceCameraController.enableInputs=true;
  viewer.camera.flyTo({destination:C.Cartesian3.fromDegrees(S.lon,S.lat,2.0e6),duration:1.5});}
@@ -308,4 +308,4 @@ function wake(){lastInput=performance.now();document.body.classList.remove('idle
 setInterval(()=>{const armed=quitArmed&&Date.now()-quitArmed<3000;const joyActive=typeof jid!=='undefined'&&jid!==null;
  if(mode==='fly'&&!armed&&!joyActive&&performance.now()-lastInput>IDLE_MS)document.body.classList.add('idle');else if(mode!=='fly'||armed)document.body.classList.remove('idle');},250);
 window.__idle=()=>document.body.classList.contains('idle');
-window.__game={endFlight,cycleQuality,applyQuality,landBtn,takeOff,toggleCam,get fp(){return fp},worms:()=>worms,nest:()=>nest,get carried(){return carried},grab,dropWorms,get score(){return score},S,teleport(lon,lat,h,hd){Object.assign(S,{lon,lat,h,heading:hd,pitch:0})},start,poop,boost,get mode(){return mode}};
+window.__game={crRespawn:(n)=>crRespawn(n),get crash(){return S.crash},endFlight,cycleQuality,applyQuality,landBtn,takeOff,toggleCam,get fp(){return fp},worms:()=>worms,nest:()=>nest,get carried(){return carried},grab,dropWorms,get score(){return score},S,teleport(lon,lat,h,hd){Object.assign(S,{lon,lat,h,heading:hd,pitch:0})},start,poop,boost,get mode(){return mode}};
