@@ -81,7 +81,7 @@ async function start(lon,lat){if(mode!=='pick')return;mode='loading';$('banner')
  if(tiles){for(let i=0;i<40&&!tiles.tilesLoaded;i++)await new Promise(r=>setTimeout(r,250));try{const [c]=await viewer.scene.sampleHeightMostDetailed([C.Cartographic.fromDegrees(lon,lat)]);if(c.height!==undefined)b=c.height;}catch(e){}}
  S.ground=b;window.__setSunFor&&window.__setSunFor(lon);mode='fly';nest={lon,lat,b};buildNest(lon,lat,b);addChicks(lon,lat,b);$('banner').style.display='none';$('search').style.display='none';$('hud').style.display='block';
  Object.assign(S,{lon,lat,h:b+4,heading:0,pitch:C.Math.toRadians(20)});
- dyn.push(eagle);viewer.scene.screenSpaceCameraController.enableInputs=false;}
+ dyn.push(eagle);viewer.scene.screenSpaceCameraController.enableInputs=false;if(typeof CR!=='undefined'){CR.graceT=performance.now()+1500;CR.graceS=1.5;}}
 let headEnt;const flap={phase:0,rate:1,bob:0};window.__flap=flap;let eagleScale=1,modelYaw=MD.yaw,modelPitch=0,modelRoll=0;window.__orient=(y,p,r)=>{modelYaw=y;modelPitch=p;modelRoll=r};
 function makeEagle(){ const eq=()=>{const q=C.Transforms.headingPitchRollQuaternion(pos(),new C.HeadingPitchRoll(S.heading-Math.PI/2,S.pitch,S.roll));
     const fix=C.Quaternion.fromHeadingPitchRoll(new C.HeadingPitchRoll(modelYaw,modelPitch,modelRoll));return C.Quaternion.multiply(q,fix,new C.Quaternion())};
@@ -106,7 +106,7 @@ joy.addEventListener('pointerdown',e=>{jid=e.pointerId;joy.setPointerCapture(jid
 const jend=e=>{if(e.pointerId!==jid)return;jid=null;inp.x=inp.y=0;knob.style.left=knob.style.top='45px'};joy.addEventListener('pointerup',jend);joy.addEventListener('pointercancel',jend);
 $('boost').addEventListener('pointerdown',e=>{e.preventDefault();boost()});$('poop').addEventListener('pointerdown',e=>{e.preventDefault();poop()});$('hover').addEventListener('pointerdown',e=>{e.preventDefault();hover()});$('qual').addEventListener('pointerdown',e=>{e.preventDefault();cycleQuality()});$('cam').addEventListener('pointerdown',e=>{e.preventDefault();toggleCam()});$('land').addEventListener('pointerdown',e=>{e.preventDefault();landBtn()});
 let actx;function beep(f1,f2,dur,type){try{actx=actx||new AudioContext();const o=actx.createOscillator(),g=actx.createGain();o.type=type;o.frequency.setValueAtTime(f1,actx.currentTime);o.frequency.exponentialRampToValueAtTime(f2,actx.currentTime+dur);g.gain.setValueAtTime(.25,actx.currentTime);g.gain.exponentialRampToValueAtTime(.001,actx.currentTime+dur);o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+dur)}catch(e){}}
-function takeOff(){if(S.crash)return;CR.graceT=performance.now()+1500;S.perched=false;S.landing=null;S.hover=false;$('hover').classList.remove('on');S.h+=0.6;S.pitch=0.35;S.speed=12;$('land').innerHTML='🛬<small>LAND</small>';beep(400,900,.3,'sine');}
+function takeOff(){if(S.crash)return;CR.graceT=performance.now()+1500;CR.graceS=1.5;S.perched=false;S.landing=null;S.hover=false;$('hover').classList.remove('on');S.h+=0.6;S.pitch=0.35;S.speed=12;$('land').innerHTML='🛬<small>LAND</small>';beep(400,900,.3,'sine');}
 const withTO=(p,ms)=>Promise.race([p,new Promise((_,rj)=>setTimeout(()=>rj('timeout'),ms))]);
 let osmB=null;const osmFeat=new Map();
 async function ensureOsm(){if(osmB){if(!dyn.includes(osmB))dyn.push(osmB);return;}if(!ION)return;try{osmB=await C.createOsmBuildingsAsync();osmB.style=new C.Cesium3DTileStyle({color:"color('white',0.0)"});osmB.maximumScreenSpaceError=MOBILE?24:16;osmB.cacheBytes=32*1024*1024;
@@ -143,14 +143,14 @@ const poops=[];
 function poop(){if(S.crash)return;if(mode!=='fly')return;beep(500,80,.35,'square');const p={lon:S.lon,lat:S.lat,h:S.h-0.3,vh:Math.sin(S.pitch)*S.speed,vf:S.speed*Math.cos(S.pitch)*0.9,hd:S.heading,h0:S.h};poopCam={p,until:Infinity};
  p.ent=viewer.entities.add({position:new C.CallbackProperty(()=>C.Cartesian3.fromDegrees(p.lon,p.lat,p.h),false),ellipsoid:{radii:new C.Cartesian3(.12,.12,.18),material:C.Color.WHITE}});dyn.push(p.ent);poops.push(p);}
 function heightTick(){if(mode!=='fly'||S.crash)return;if(crProbeStep())return;const now=performance.now(),m=111320;
- const agl0=S.h-(S.ground||0),still=!!(S.hover||S.perched||S.landing),sInt=still?300:Math.min(agl0>300?700:agl0>40?400:(MOBILE?200:150),S.speed>30?220:1e9);
- if((now-lastSampleT)>sInt){lastSampleT=now;const AH=[Math.max(20,S.speed*0.6),Math.max(60,S.speed*1.8)];const cosl=Math.cos(S.lat*Math.PI/180);
+ const agl0=S.h-(S.ground||0),still=!!(S.hover||S.perched||S.landing),sInt=still?300:Math.min(agl0>300?700:agl0>40?400:(MOBILE?200:150),S.speed>30?220:1e9,now-CR.cityT<10000?(MOBILE?180:150):1e9);
+ if((now-lastSampleT)>sInt){lastSampleT=now;const city=now-CR.cityT<10000,AH=city?[Math.max(14,S.speed*0.5),Math.max(40,S.speed*1.4)]:[Math.max(20,S.speed*0.6),Math.max(60,S.speed*1.8)];const cosl=Math.cos(S.lat*Math.PI/180);
   const moved=Math.abs(S.lon-lastSP.lon)+Math.abs(S.lat-lastSP.lat)>2e-5;// ~2 m
   const far=agl0>900&&!S.hover,skip=still&&!moved&&now-lastStillS<1500;// high above everything: terrain only; hovering/perched in place: ground can't change
   const slot=still?0:(sampleSlot=(sampleSlot+1)%4);const tg=terrainAt(S.lon,S.lat);let ahead=-1e9;aheadB=-1e9;
-  if(!skip&&slot%2===0){lastSP.lon=S.lon;lastSP.lat=S.lat;lastStillS=now;const g0=far?tg:groundAt(S.lon,S.lat);if(!far&&crGroundSample(S.ground,g0,tg))return;if(g0!==null)S.ground=g0;else if(tg!==null)S.ground=tg;}
+  if(!skip&&slot%2===0){lastSP.lon=S.lon;lastSP.lat=S.lat;lastStillS=now;const g0=far?tg:groundAt(S.lon,S.lat);if(tg!=null)S.terr=tg;if(g0!=null&&tg!=null&&g0-tg>15)CR.cityT=now;if(!far&&crGroundSample(S.ground,g0,tg))return;CR.lastGroundT=now;if(g0!==null)S.ground=g0;else if(tg!==null)S.ground=tg;}
   for(let k=0;k<AH.length;k++){const dd=AH[k],la=S.lat+Math.cos(S.heading)*dd/m,lo=S.lon+Math.sin(S.heading)*dd/(m*cosl);const t=terrainAt(lo,la);
-   if(far)aheadS[k]=-1e9;else if(!still&&slot===(k?3:1)){const g=groundAt(lo,la);aheadS[k]=g!==null?g:(t??-1e9);aheadH[k]=S.heading;crAheadSample(dd,g,t);}
+   if(far)aheadS[k]=-1e9;else if(!still&&slot===(k?3:1)){const g=groundAt(lo,la);aheadS[k]=g!==null?g:(t??-1e9);aheadH[k]=S.heading;if(g!=null&&t!=null&&g-t>15)CR.cityT=now;crAheadSample(dd,g,t);}
    ahead=Math.max(ahead,t??-1e9);aheadB=Math.max(aheadB,Math.abs(S.heading-aheadH[k])<0.35?aheadS[k]:-1e9);}
   if(tg!==null&&(S.ground==null||S.ground<tg-30))S.ground=tg;lastAhead=ahead;}
 }
@@ -172,7 +172,8 @@ viewer.scene.postRender.addEventListener(()=>{const now=performance.now(),dt=Mat
  // height sampling: scene.sampleHeight forces a GPU pick render + synchronous readPixels (very costly on phones),
  // so do at most ONE per tick, round-robin over [here, ahead1, here, ahead2]; cheap CPU terrain heights fill the gaps every tick.
  crWallCheck();if(S.crash)return;crSafeTick(now);const gnd=S.ground||0,ahead=lastAhead;window.__warn=!S.hover&&!S.perched&&!S.landing&&aheadB+2>S.h;if(!S.hover&&ahead+4>S.h){window.__warn=true;S.pitch=Math.min(1.0,S.pitch+2.5*dt);S.h+=Math.min(ahead+4-S.h,15)*dt*2;}
- if(!S.perched&&!S.landing&&S.h<gnd+2){S.h=gnd+2;if(S.hover)S.holdH=S.h;if(S.pitch<0)S.pitch=0;} if(S.h>gnd+8000)S.h=gnd+8000;
+ const onBldg=S.terr!=null&&gnd-S.terr>8,clr=onBldg?0.35:2;
+ if(!S.perched&&!S.landing&&S.h<gnd+clr){if(onBldg&&crRoofHit(gnd))return;S.h=gnd+clr;if(S.hover)S.holdH=S.h;if(S.pitch<0)S.pitch=0;} if(S.h>gnd+8000)S.h=gnd+8000;
  for(let i=poops.length-1;i>=0;i--){const p=poops[i];p.vh-=9.8*dt;p.h+=p.vh*dt;p.lat+=Math.cos(p.hd)*p.vf*dt/m;p.lon+=Math.sin(p.hd)*p.vf*dt/(m*Math.cos(p.lat*Math.PI/180));
   if(p.gT===undefined||(p.h<(p.g??0)+40&&now-p.gT>(p.h<(p.g??0)+4?60:220))||now-p.gT>600){p.gT=now;p.g=(p.h<(p.g??-1e9)+40||p.g===undefined?groundAt(p.lon,p.lat):terrainAt(p.lon,p.lat))??p.g??0;}const pg=p.g;if(p.h<=pg+0.05){viewer.entities.remove(p.ent);const r=Math.min(3,0.6+Math.abs(p.vh)*0.03);viewer.entities.add({position:C.Cartesian3.fromDegrees(p.lon,p.lat,pg+0.08),ellipse:{semiMajorAxis:r,semiMinorAxis:r*0.75,height:pg+0.08,rotation:Math.random()*3,material:C.Color.WHITE.withAlpha(.92)}});beep(160,60,.15,'triangle');poops.splice(i,1);splatFx(p.lon,p.lat,pg,Math.max(0,p.h0-pg));if(poopCam&&poopCam.p===p)poopCam.until=performance.now()+2500;}}
  stepDrops(dt);wormStep();
